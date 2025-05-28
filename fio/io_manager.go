@@ -2,7 +2,7 @@ package fio
 
 const FilePermission = 0644
 
-// IOManager
+// IOManager， 文件IO的接口
 type IOManager interface {
 	//Read 从文件的指定位置读取数据
 	Read([]byte, int64) (int, error)

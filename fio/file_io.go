@@ -4,7 +4,7 @@ import (
 	"os"
 )
 
-// FileIO 标准系统文件IO
+// FileIO 标准系统文件IO, 可以组合到我们的DataFile对象中
 type FileIO struct {
 	fd *os.File
 }

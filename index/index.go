@@ -6,6 +6,7 @@ import (
 	"github.com/google/btree"
 )
 
+//Indexer 索引 接口
 type Indexer interface {
 	// Put 向索引中添加key对应的位置信息
 	Put(key []byte, pos *data.LogRecordPos) bool

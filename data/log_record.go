@@ -14,7 +14,7 @@ type LogRecord struct {
 	Type  LogRecordType
 }
 
-// LogRecordPos represents the position of data record in the disk
+// LogRecordPos 用于内存中的索引，可以用来索引到磁盘中具体的文件以及所在的文件的偏移位置
 type LogRecordPos struct {
 	Fid    uint32 //表示数据存储在哪个文件中
 	Offset int64  //表示数据存储在文件中的偏移量

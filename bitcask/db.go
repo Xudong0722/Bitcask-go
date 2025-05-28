@@ -9,11 +9,11 @@ import (
 )
 
 type DB struct {
-	mutex         *sync.RWMutex
+	mutex         *sync.RWMutex             //读写锁，保证线程安全
 	activeFile    *data.DataFile            //当前活跃的文件
 	olderFiles    map[uint32]*data.DataFile //旧文件，只能用于读
-	configuration config.Configuration
-	index         index.Indexer
+	configuration config.Configuration      //用户配置项
+	index         index.Indexer             //内存索引, [key, LogRecordPos]
 }
 
 // 写入数据到DB中， key不能为空
@@ -22,19 +22,24 @@ func (db *DB) Put(key, value []byte) error {
 		return util.ErrKeyIsEmpty
 	}
 
+	//构造一个LogRecord，准备写入到磁盘的数据文件中
 	log_record := &data.LogRecord{
 		Key:   key,
 		Value: value,
 		Type:  data.LogRecordNormal,
 	}
 
+	db.mutex.Lock()
+	defer db.mutex.Unlock()
+
+	//追加写入到磁盘的活跃文件中
 	pos, err := db.appendLogRecord(log_record)
 
 	if err != nil {
 		return err
 	}
 
-	//写入到磁盘中之后，更新内存中的索引
+	//写入到磁盘中之后，更新内存中的索引(TODO, 这里会不会写磁盘成功，更新内存失败，造成数据不一致)
 	if ok := db.index.Put(key, pos); !ok {
 		return util.ErrIndexUpdateFailed
 	}
@@ -94,26 +99,34 @@ func (db *DB) appendLogRecord(logRecord *data.LogRecord) (*data.LogRecordPos, er
 		}
 	}
 
+	//对数据进行编码，返回byte[]
 	encRecord, len := data.EncodeLogRecord(logRecord)
 
-	//如果写入的文件不能够容纳新的记录，则将当前活跃文件关闭，并创建一个新的活跃文件
-	if db.activeFile.WriteOffset+len > db.configuration.DataFileMaxSize {
+	//如果写入的文件已经不能够容纳新的记录，则将当前活跃文件关闭，并创建一个新的活跃文件
+	if db.activeFile.WriteOffset + len > db.configuration.DataFileMaxSize {
+		//将当前活跃文件写入到磁盘中
 		if err := db.activeFile.Sync(); err != nil {
 			return nil, err
 		}
 
+		//标记位旧文件
 		db.olderFiles[db.activeFile.Fid] = db.activeFile
 
+		//创建新的活跃文件
 		if err := db.setActiveDataFile(); err != nil {
 			return nil, err
 		}
 	}
 
+	//活跃文件的可写位置偏移
 	writeOff := db.activeFile.WriteOffset
+
+	//将我们编码后的字节数组写入到活跃文件中(不够放，怎么办？)
 	if err := db.activeFile.Write(encRecord); err != nil {
 		return nil, err
 	}
 
+	//如果配置过写同步磁盘，立即将缓冲区中的数据写入到磁盘中
 	if db.configuration.SyncWrites {
 		if err := db.activeFile.Sync(); err != nil {
 			return nil, err
@@ -131,16 +144,19 @@ func (db *DB) appendLogRecord(logRecord *data.LogRecord) (*data.LogRecordPos, er
 func (db *DB) setActiveDataFile() error {
 	var initialFid uint32 = 0
 
+	//如果已经有活跃文件了， 那么新的活跃文件的Fid递增，否则为初始值0
 	if db.activeFile != nil {
 		initialFid = db.activeFile.Fid + 1
 	}
 
+	//打开活跃文件
 	dataFile, err := data.OpenDataFile(db.configuration.DataDir, initialFid)
 
 	if err != nil {
 		return err
 	}
 
+	//标记新的活跃文件
 	db.activeFile = dataFile
 	return nil
 }
