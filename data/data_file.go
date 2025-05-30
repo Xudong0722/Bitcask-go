@@ -2,6 +2,8 @@ package data
 
 import "Bitcask-go/fio"
 
+const DataFileSuffix = ".data"
+
 // DataFile 数据文件
 type DataFile struct {
 	Fid         uint32

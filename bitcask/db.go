@@ -16,6 +16,32 @@ type DB struct {
 	index         index.Indexer             //内存索引, [key, LogRecordPos]
 }
 
+// 通过配置项构造一个DB
+func Open(cfg Configuration) (*DB, error) {
+	if err := config.checkCfg(cfg); err != nil {
+		return nil, err
+	}
+
+	//如果用户配置的文件目录不存在，则创建这个目录
+	if _, err := os.Stat(cfg.DataDir); os.IsNotExist(err) {
+		if err := os.MkdirAll(cfg.DataDir, os.ModePerm); err != nil {
+			return nil, err
+		}
+	}
+
+	//初始化 DB
+	db := &DB {
+		mutex : new(sync.RWMutex),
+		olderFiles: make(map[uint32]*data.DataFile),
+		configuration: cfg,
+		index: index.NewIndexer(cfg.indexerType),
+	}
+
+	if err := db.loadDataFiles(); err != nil {
+		return nil, err
+	}
+}
+
 // 写入数据到DB中， key不能为空
 func (db *DB) Put(key, value []byte) error {
 	if len(key) == 0 {
@@ -160,3 +186,47 @@ func (db *DB) setActiveDataFile() error {
 	db.activeFile = dataFile
 	return nil
 }
+
+// 从磁盘中加载文件
+func (db *DB)loadDataFiles() error {
+	dirEntries, err := os.ReadDir(dp.config.DataDir)
+	if err != nil {
+		return err
+	}
+
+	var fds []int
+	//遍历这个目录下的所有文件，找到以.data结尾的文件
+
+	for _, entry := range dirEntries {
+		if strings.HasSuffix(entry.Name(), data.DataFileSuffix) {
+			splitNames := strings.Split(entry.Name(), ".")
+			fd, err := strconv.Atoi(splitNames[0])
+			if err != nil {
+				return util.ErrDataDirCorrupted
+			}
+
+			fds = append(fds, fd)
+		}
+	}
+
+	//对文件id进行排序
+	sort.Ints(fds)
+
+	//遍历每个id，打开其对应的文件
+	for i, fd := range fds {
+		dataFile, err := data.OpenDataFile(db.config.DirPath, uint32(fd))
+		if err != nil {
+			 return err
+		}
+
+		//最后一个文件是活跃文件
+		if i + 1 == len(fds) {
+			db.activeFile = dataFile
+		} else {
+			db.olderFiles[fd] = dataFile
+		}
+	}
+
+	return nil
+}
+
