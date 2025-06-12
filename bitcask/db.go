@@ -14,6 +14,7 @@ type DB struct {
 	olderFiles    map[uint32]*data.DataFile //旧文件，只能用于读
 	configuration config.Configuration      //用户配置项
 	index         index.Indexer             //内存索引, [key, LogRecordPos]
+	fds           []int                     //已排序的文件id，只用于加载索引
 }
 
 // 通过配置项构造一个DB
@@ -37,9 +38,17 @@ func Open(cfg Configuration) (*DB, error) {
 		index: index.NewIndexer(cfg.indexerType),
 	}
 
+	//从磁盘中加载所有的数据文件
 	if err := db.loadDataFiles(); err != nil {
 		return nil, err
 	}
+
+	//从数据文件构建索引
+	if err := db.LoadIndexFromDataFiles(); err != nil {
+		return nil, err
+	}
+
+	return db
 }
 
 // 写入数据到DB中， key不能为空
@@ -100,7 +109,7 @@ func (db *DB) Get(key []byte) ([]byte, error) {
 		return nil, util.ErrDataFileNotFound
 	}
 
-	log_record, err := data_file.ReadAt(pos.Offset)
+	log_record, _, err := data_file.ReadLogRecord(pos.Offset)
 	if err != nil {
 		return nil, err
 	}
@@ -211,6 +220,7 @@ func (db *DB)loadDataFiles() error {
 
 	//对文件id进行排序
 	sort.Ints(fds)
+    db.fds = fds
 
 	//遍历每个id，打开其对应的文件
 	for i, fd := range fds {
@@ -227,6 +237,50 @@ func (db *DB)loadDataFiles() error {
 		}
 	}
 
+	return nil
+}
+
+func (db *DB)LoadIndexFromDataFiles() error {
+	//如果没有文件，说明db是空的
+	if len(db.fds) == 0 {
+		return nil
+	}
+
+	for _, _fid range db.fds {
+		var fid = uint32(_fid)
+		var dataFile *data.DataFile
+		
+		if fid == db.activeFile.Fid {
+			dataFile = db.activeFile
+		}else{
+			dataFile = db.olderFiles[fid]
+		}
+
+		var offset int64 = 0
+		for {
+			logRecord, size, err := dataFile.ReadLogRecord(offset)
+			if err != nil {
+				if err == io.EOF {
+					break;
+				}
+				return err
+			}
+
+			logRecordPos := data.LogRecordPos(Fid: fid, Offset: offset) 
+			if logRecord.Type == LogRecordDeleted {
+				db.index.Delete(logRecord.Key)
+			}else {
+				db.index.Put(logRecord.Key, LogRecordPos)
+			}
+
+			offset += size
+		}
+
+		//如果是活跃文件，因为我们追加写入需要文件当前的偏移量，这里更新一下
+		if fid == db.activeFile.Fid {
+			db.activeFile.WriteOffset = offset
+		}
+	}
 	return nil
 }
 

@@ -26,7 +26,7 @@ func (df *DataFile) Write(buf []byte) error {
 	return nil
 }
 
-//从指定偏移读取数据， TODO：指定读取多长的数据
-func (df *DataFile) ReadAt(offset int64) (*LogRecord, error) {
-	return nil, nil
+//从指定偏移读取数据
+func (df *DataFile) ReadLogRecord(offset int64) (*LogRecord, int64, error) {
+	return nil, 0, nil
 }
