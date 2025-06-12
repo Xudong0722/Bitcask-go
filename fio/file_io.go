@@ -42,7 +42,7 @@ func (fio *FileIO) Close() error {
 func (fio *FileIO) Size() (int64, error) {
 	stat, err := fio.fd.Stat()
 	if err != nil {
-		 return 0, err
+		return 0, err
 	}
 	return stat.Size(), nil
 }
