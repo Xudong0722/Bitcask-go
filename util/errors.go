@@ -11,4 +11,5 @@ var (
   	ErrDataFileMaxSizeInvalid = errors.New("data file max size must greater than zero.")
 	ErrDataDirCorrupted  = errors.New("The database directory maybe corrupted.")
 	ErrDataDeleteFailed  = errors.New("Delete data log record failed.")
+	ErrInvalidCRC        = errors.New("Invalid crc value, log record maybe corrupted.")
 )
