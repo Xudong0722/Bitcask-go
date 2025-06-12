@@ -5,6 +5,11 @@ import (
 	"Bitcask-go/data"
 	"Bitcask-go/index"
 	"Bitcask-go/util"
+	"io"
+	"os"
+	"sort"
+	"strconv"
+	"strings"
 	"sync"
 )
 
@@ -18,8 +23,8 @@ type DB struct {
 }
 
 // 通过配置项构造一个DB
-func Open(cfg Configuration) (*DB, error) {
-	if err := config.checkCfg(cfg); err != nil {
+func Open(cfg config.Configuration) (*DB, error) {
+	if err := config.CheckCfg(cfg); err != nil {
 		return nil, err
 	}
 
@@ -31,11 +36,11 @@ func Open(cfg Configuration) (*DB, error) {
 	}
 
 	//初始化 DB
-	db := &DB {
-		mutex : new(sync.RWMutex),
-		olderFiles: make(map[uint32]*data.DataFile),
+	db := &DB{
+		mutex:         new(sync.RWMutex),
+		olderFiles:    make(map[uint32]*data.DataFile),
 		configuration: cfg,
-		index: index.NewIndexer(cfg.indexerType),
+		index:         index.NewIndexer(cfg.IndexerType),
 	}
 
 	//从磁盘中加载所有的数据文件
@@ -48,7 +53,7 @@ func Open(cfg Configuration) (*DB, error) {
 		return nil, err
 	}
 
-	return db
+	return db, nil
 }
 
 // 写入数据到DB中， key不能为空
@@ -123,7 +128,7 @@ func (db *DB) Get(key []byte) ([]byte, error) {
 }
 
 // 删除某条数据
-func (db *DB) Delete(key []Byte) error {
+func (db *DB) Delete(key []byte) error {
 	if len(key) == 0 {
 		return util.ErrKeyIsEmpty
 	}
@@ -134,8 +139,8 @@ func (db *DB) Delete(key []Byte) error {
 	}
 
 	//先构造一条删除记录，追加写入DB
-	log_record := data.LogRecord(Key: key, Type: data.LogRecordDeleted)
-	_, err := db.appendLogRecord(log_record)
+	logRecord := data.LogRecord{Key: key, Type: data.LogRecordDeleted}
+	_, err := db.appendLogRecord(&logRecord)
 	if err != nil {
 		return util.ErrDataDeleteFailed
 	}
@@ -165,7 +170,7 @@ func (db *DB) appendLogRecord(logRecord *data.LogRecord) (*data.LogRecordPos, er
 	encRecord, len := data.EncodeLogRecord(logRecord)
 
 	//如果写入的文件已经不能够容纳新的记录，则将当前活跃文件关闭，并创建一个新的活跃文件
-	if db.activeFile.WriteOffset + len > db.configuration.DataFileMaxSize {
+	if db.activeFile.WriteOffset+len > db.configuration.DataFileMaxSize {
 		//将当前活跃文件写入到磁盘中
 		if err := db.activeFile.Sync(); err != nil {
 			return nil, err
@@ -224,8 +229,8 @@ func (db *DB) setActiveDataFile() error {
 }
 
 // 从磁盘中加载文件
-func (db *DB)loadDataFiles() error {
-	dirEntries, err := os.ReadDir(dp.config.DataDir)
+func (db *DB) loadDataFiles() error {
+	dirEntries, err := os.ReadDir(db.configuration.DataDir)
 	if err != nil {
 		return err
 	}
@@ -247,39 +252,39 @@ func (db *DB)loadDataFiles() error {
 
 	//对文件id进行排序
 	sort.Ints(fds)
-    db.fds = fds
+	db.fds = fds
 
 	//遍历每个id，打开其对应的文件
 	for i, fd := range fds {
-		dataFile, err := data.OpenDataFile(db.config.DirPath, uint32(fd))
+		dataFile, err := data.OpenDataFile(db.configuration.DataDir, uint32(fd))
 		if err != nil {
-			 return err
+			return err
 		}
 
 		//最后一个文件是活跃文件
-		if i + 1 == len(fds) {
+		if i+1 == len(fds) {
 			db.activeFile = dataFile
 		} else {
-			db.olderFiles[fd] = dataFile
+			db.olderFiles[uint32(fd)] = dataFile
 		}
 	}
 
 	return nil
 }
 
-func (db *DB)LoadIndexFromDataFiles() error {
+func (db *DB) LoadIndexFromDataFiles() error {
 	//如果没有文件，说明db是空的
 	if len(db.fds) == 0 {
 		return nil
 	}
 
-	for _, _fid range db.fds {
+	for _, _fid := range db.fds {
 		var fid = uint32(_fid)
 		var dataFile *data.DataFile
 
 		if fid == db.activeFile.Fid {
 			dataFile = db.activeFile
-		}else{
+		} else {
 			dataFile = db.olderFiles[fid]
 		}
 
@@ -288,19 +293,19 @@ func (db *DB)LoadIndexFromDataFiles() error {
 			logRecord, size, err := dataFile.ReadLogRecord(offset)
 			if err != nil {
 				if err == io.EOF {
-					break;
+					break
 				}
 				return err
 			}
 
-			logRecordPos := data.LogRecordPos(Fid: fid, Offset: offset) 
+			logRecordPos := data.LogRecordPos{Fid: fid, Offset: offset}
 			var ok bool
-			if logRecord.Type == LogRecordDeleted {
+			if logRecord.Type == data.LogRecordDeleted {
 				ok = db.index.Delete(logRecord.Key)
-			}else {
-				ok = db.index.Put(logRecord.Key, LogRecordPos)
+			} else {
+				ok = db.index.Put(logRecord.Key, &logRecordPos)
 			}
-			
+
 			if !ok {
 				return util.ErrIndexUpdateFailed
 			}
@@ -315,4 +320,3 @@ func (db *DB)LoadIndexFromDataFiles() error {
 	}
 	return nil
 }
-

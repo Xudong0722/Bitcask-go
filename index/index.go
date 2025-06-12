@@ -3,10 +3,11 @@ package index
 import (
 	"Bitcask-go/data"
 	"bytes"
+
 	"github.com/google/btree"
 )
 
-//Indexer 索引 接口
+// Indexer 索引 接口
 type Indexer interface {
 	// Put 向索引中添加key对应的位置信息
 	Put(key []byte, pos *data.LogRecordPos) bool
@@ -27,10 +28,10 @@ const (
 	ART
 )
 
-func NewIndexer(type IndexerType) Indexer {
-	switch(type) {
-	case BTree :
-		return NewBTree()
+func NewIndexer(tp IndexerType) Indexer {
+	switch tp {
+	case Btree:
+		return NewBTree(32)
 	case ART:
 		return nil
 	default:
