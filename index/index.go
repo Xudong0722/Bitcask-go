@@ -23,7 +23,7 @@ type IndexerType = int8
 const (
 	Btree IndexerType = iota + 1
 
-	//自适应基数索引
+	//自适应基树索引
 	ART
 )
 

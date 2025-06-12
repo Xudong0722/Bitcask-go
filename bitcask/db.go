@@ -122,6 +122,33 @@ func (db *DB) Get(key []byte) ([]byte, error) {
 	return log_record.Value, nil
 }
 
+// 删除某条数据
+func (db *DB) Delete(key []Byte) error {
+	if len(key) == 0 {
+		return util.ErrKeyIsEmpty
+	}
+
+	//如果key不存在，直接返回
+	if pos := db.index.Get(key); pos == nil {
+		return util.ErrKeyNotFound
+	}
+
+	//先构造一条删除记录，追加写入DB
+	log_record := data.LogRecord(Key: key, Type: data.LogRecordDeleted)
+	_, err := db.appendLogRecord(log_record)
+	if err != nil {
+		return util.ErrDataDeleteFailed
+	}
+
+	//然后删除内存索引中的记录
+	ok := db.index.Delete(key)
+	if !ok {
+		return util.ErrDataDeleteFailed
+	}
+
+	return nil
+}
+
 // 追加日志记录到活跃文件中
 func (db *DB) appendLogRecord(logRecord *data.LogRecord) (*data.LogRecordPos, error) {
 	db.mutex.Lock()
@@ -249,7 +276,7 @@ func (db *DB)LoadIndexFromDataFiles() error {
 	for _, _fid range db.fds {
 		var fid = uint32(_fid)
 		var dataFile *data.DataFile
-		
+
 		if fid == db.activeFile.Fid {
 			dataFile = db.activeFile
 		}else{
@@ -267,10 +294,15 @@ func (db *DB)LoadIndexFromDataFiles() error {
 			}
 
 			logRecordPos := data.LogRecordPos(Fid: fid, Offset: offset) 
+			var ok bool
 			if logRecord.Type == LogRecordDeleted {
-				db.index.Delete(logRecord.Key)
+				ok = db.index.Delete(logRecord.Key)
 			}else {
-				db.index.Put(logRecord.Key, LogRecordPos)
+				ok = db.index.Put(logRecord.Key, LogRecordPos)
+			}
+			
+			if !ok {
+				return util.ErrIndexUpdateFailed
 			}
 
 			offset += size
