@@ -24,6 +24,7 @@ type DB struct {
 
 // 通过配置项构造一个DB
 func Open(cfg config.Configuration) (*DB, error) {
+	// 先检查配置是否有效
 	if err := config.CheckCfg(cfg); err != nil {
 		return nil, err
 	}
@@ -230,27 +231,31 @@ func (db *DB) setActiveDataFile() error {
 
 // 从磁盘中加载文件
 func (db *DB) loadDataFiles() error {
+	//读取目录下所有的文件
 	dirEntries, err := os.ReadDir(db.configuration.DataDir)
 	if err != nil {
 		return err
 	}
-
+    
+	//用于存放所有的文件id
 	var fds []int
 	//遍历这个目录下的所有文件，找到以.data结尾的文件
 
 	for _, entry := range dirEntries {
+		//format: 000000001.data
 		if strings.HasSuffix(entry.Name(), data.DataFileSuffix) {
 			splitNames := strings.Split(entry.Name(), ".")
 			fd, err := strconv.Atoi(splitNames[0])
 			if err != nil {
 				return util.ErrDataDirCorrupted
 			}
-
+			//取出id存起来
 			fds = append(fds, fd)
 		}
 	}
 
 	//对文件id进行排序
+	//因为是追加写入，所以我们约定id递增，文件追加
 	sort.Ints(fds)
 	db.fds = fds
 
@@ -278,6 +283,7 @@ func (db *DB) LoadIndexFromDataFiles() error {
 		return nil
 	}
 
+	//严格按照时间顺序构建索引
 	for _, _fid := range db.fds {
 		var fid = uint32(_fid)
 		var dataFile *data.DataFile
@@ -290,6 +296,7 @@ func (db *DB) LoadIndexFromDataFiles() error {
 
 		var offset int64 = 0
 		for {
+			//读取一条LogRecord，并得到其大小
 			logRecord, size, err := dataFile.ReadLogRecord(offset)
 			if err != nil {
 				if err == io.EOF {
@@ -298,9 +305,11 @@ func (db *DB) LoadIndexFromDataFiles() error {
 				return err
 			}
 
+			//构造索引中的记录
 			logRecordPos := data.LogRecordPos{Fid: fid, Offset: offset}
 			var ok bool
 			if logRecord.Type == data.LogRecordDeleted {
+				//如果是要删除的，删除之前插入的索引
 				ok = db.index.Delete(logRecord.Key)
 			} else {
 				ok = db.index.Put(logRecord.Key, &logRecordPos)
@@ -310,6 +319,7 @@ func (db *DB) LoadIndexFromDataFiles() error {
 				return util.ErrIndexUpdateFailed
 			}
 
+			//偏移量移动当前LogRecord大小
 			offset += size
 		}
 

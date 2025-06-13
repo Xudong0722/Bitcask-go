@@ -23,22 +23,27 @@ func NewFileIOManager(filePath string) (*FileIO, error) {
 	return &FileIO{fd: fd}, nil
 }
 
+//从文件的指定位置读取数据
 func (fio *FileIO) Read(bs []byte, offset int64) (int, error) {
 	return fio.fd.ReadAt(bs, offset)
 }
 
+//写文件
 func (fio *FileIO) Write(bs []byte) (int, error) {
 	return fio.fd.Write(bs)
 }
 
+//将文件同步到磁盘
 func (fio *FileIO) Sync() error {
 	return fio.fd.Sync()
 }
 
+//关闭文件
 func (fio *FileIO) Close() error {
 	return fio.fd.Close()
 }
 
+//返回文件大小
 func (fio *FileIO) Size() (int64, error) {
 	stat, err := fio.fd.Stat()
 	if err != nil {

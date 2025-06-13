@@ -61,7 +61,7 @@ func (df *DataFile) ReadLogRecord(offset int64) (*LogRecord, int64, error) {
 	}
 
 	var headerBytes int64 = maxLogRecordHeaderSize
-	//如果文件剩下的大小 小于 maxLogRecordHeaderSize，我们就只读剩下的即可
+	//如果文件剩下的大小 小于 maxLogRecordHeaderSize，我们就只读剩下那一段的即可
 	if headerBytes > fileSize-offset {
 		headerBytes = fileSize - offset
 	}
@@ -72,6 +72,7 @@ func (df *DataFile) ReadLogRecord(offset int64) (*LogRecord, int64, error) {
 		return nil, 0, err
 	}
 
+	//解码header
 	header, headerSize := decodeLogRecordHeader(headerBuf)
 	if header == nil {
 		return nil, 0, io.EOF
