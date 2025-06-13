@@ -2,6 +2,7 @@ package data
 
 import (
 	"encoding/binary"
+	"hash/crc32"
 )
 
 type LogRecordType = byte
@@ -39,14 +40,15 @@ type LogRecordPos struct {
 // +------------+------------+------------+------------+------------+------------+
 // |    crc     |    type    |  key size  | value size |   key data | value data |
 // +------------+------------+------------+------------+------------+------------+
-//     4Bytes        1Bytes     Max-5Bytes  Max-5Bytes  
+//
+//	4Bytes        1Bytes     Max-5Bytes  Max-5Bytes
 func EncodeLogRecord(logRecord *LogRecord) ([]byte, int64) {
 	//由于key和value都是byte array，我们只用编码header即可
 	header := make([]byte, maxLogRecordHeaderSize)
-	
-	var index uint32 = 4
+
+	var index int = 4
 	header[index] = logRecord.Type
-	index ++
+	index++
 
 	//放置key size
 	index += binary.PutVarint(header[index:], int64(len(logRecord.Key)))
@@ -54,23 +56,23 @@ func EncodeLogRecord(logRecord *LogRecord) ([]byte, int64) {
 	index += binary.PutVarint(header[index:], int64(len(logRecord.Value)))
 
 	//到此，index就是header的长度
-	var totalSize int64 = index + len(logRecord.Key) + len(logRecord.Value)
-	
+	var totalSize = index + len(logRecord.Key) + len(logRecord.Value)
+
 	encryptBytes := make([]byte, totalSize)
 
 	//将header放到最后的字节数组中
 	//copy(dst, src)
 	copy(encryptBytes[:index], header[:index])
-    
+
 	//将key和value分别放进去
 	copy(encryptBytes[index:], logRecord.Key)
-	copy(encryptBytes[index + len(logRecord.Key):], logRecord.Value)
+	copy(encryptBytes[index+len(logRecord.Key):], logRecord.Value)
 
 	//对整个数据进行crc校验，然后放到前四个字节中
-	crc := crc32.CheckSumIEEE(encryptBytes[4:])
+	crc := crc32.ChecksumIEEE(encryptBytes[4:])
 	binary.LittleEndian.PutUint32(encryptBytes[:4], crc)
 
-	return encryptBytes, totalSize
+	return encryptBytes, int64(totalSize)
 }
 
 // 解码LogRecord的头部
@@ -89,22 +91,22 @@ func decodeLogRecordHeader(buf []byte) (*LogRecordHeader, int64) {
 	//读取可变长度key size
 	_, keyLen := binary.Varint(buf[index:])
 	//读取可变长度value size
-	_, valueLen := binary.Varint(buf[index + keyLen:])
-	
-	var headerSize int64 = index + keyLen + valueLen
-	return &LogRecordHeader {
-		crc: crcVal,
+	_, valueLen := binary.Varint(buf[index+uint32(keyLen):])
+
+	var headerSize = int(index) + keyLen + valueLen
+	return &LogRecordHeader{
+		crc:        crcVal,
 		recordType: tp,
-		keySize: uint32(keyLen),
-		valueSize: uint32(valueLen)
-	}, headerSize
+		keySize:    uint32(keyLen),
+		valueSize:  uint32(valueLen),
+	}, int64(headerSize)
 }
 
 func getLogRecordCRC(logRecord *LogRecord, header []byte) uint32 {
 	if logRecord == nil {
 		return 0
 	}
-	crc := crc32.CheckSumIEEE(header[:])
+	crc := crc32.ChecksumIEEE(header[:])
 	crc = crc32.Update(crc, crc32.IEEETable, logRecord.Key)
 	crc = crc32.Update(crc, crc32.IEEETable, logRecord.Value)
 
