@@ -1,8 +1,8 @@
 package test
 
 import (
-	"Bitcask-go/data"
-	"Bitcask-go/index"
+	"Bitcask_go/data"
+	"Bitcask_go/index"
 	"testing"
 
 	"github.com/stretchr/testify/assert"

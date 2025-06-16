@@ -1,7 +1,8 @@
 package config
 
 import (
-	"Bitcask-go/util"
+	"Bitcask_go/util"
+	"os"
 )
 
 type Configuration struct {
@@ -27,3 +28,10 @@ const (
 	Btree IndexerType = iota + 1
 	ART
 )
+
+var DefaultOptions = Configuration{
+	DataDir:         os.TempDir(),
+	DataFileMaxSize: 256 * 1024 * 1024, //256MB
+	SyncWrites:      false,
+	IndexerType:     Btree,
+}

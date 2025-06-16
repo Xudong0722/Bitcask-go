@@ -2,6 +2,7 @@ package data
 
 import (
 	"encoding/binary"
+	"fmt"
 	"hash/crc32"
 )
 
@@ -72,11 +73,12 @@ func EncodeLogRecord(logRecord *LogRecord) ([]byte, int64) {
 	crc := crc32.ChecksumIEEE(encryptBytes[4:])
 	binary.LittleEndian.PutUint32(encryptBytes[:4], crc)
 
+	fmt.Printf("header size:%d, crc:%d\n", index, crc)
 	return encryptBytes, int64(totalSize)
 }
 
 // 解码LogRecord的头部
-func decodeLogRecordHeader(buf []byte) (*LogRecordHeader, int64) {
+func DecodeLogRecordHeader(buf []byte) (*LogRecordHeader, int64) {
 	if len(buf) <= 4 {
 		return nil, 0
 	}
@@ -89,11 +91,11 @@ func decodeLogRecordHeader(buf []byte) (*LogRecordHeader, int64) {
 	var index uint32 = 5
 
 	//读取可变长度key size
-	_, keyLen := binary.Varint(buf[index:])
+	keyLen, kSize := binary.Varint(buf[index:])
 	//读取可变长度value size
-	_, valueLen := binary.Varint(buf[index+uint32(keyLen):])
+	valueLen, vSize := binary.Varint(buf[index+uint32(kSize):])
 
-	var headerSize = int(index) + keyLen + valueLen
+	var headerSize = int(index) + kSize + vSize
 	return &LogRecordHeader{
 		crc:        crcVal,
 		recordType: tp,

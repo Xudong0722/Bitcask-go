@@ -1,7 +1,7 @@
 package index
 
 import (
-	"Bitcask-go/data"
+	"Bitcask_go/data"
 	"sync"
 
 	"github.com/google/btree"

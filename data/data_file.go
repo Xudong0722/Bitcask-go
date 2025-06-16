@@ -1,8 +1,8 @@
 package data
 
 import (
-	"Bitcask-go/fio"
-	"Bitcask-go/util"
+	"Bitcask_go/fio"
+	"Bitcask_go/util"
 	"fmt"
 	"hash/crc32"
 	"io"
@@ -73,7 +73,7 @@ func (df *DataFile) ReadLogRecord(offset int64) (*LogRecord, int64, error) {
 	}
 
 	//解码header
-	header, headerSize := decodeLogRecordHeader(headerBuf)
+	header, headerSize := DecodeLogRecordHeader(headerBuf)
 	if header == nil {
 		return nil, 0, io.EOF
 	}

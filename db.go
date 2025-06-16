@@ -1,10 +1,10 @@
-package bitcask
+package Bitcask_go
 
 import (
-	"Bitcask-go/config"
-	"Bitcask-go/data"
-	"Bitcask-go/index"
-	"Bitcask-go/util"
+	"Bitcask_go/config"
+	"Bitcask_go/data"
+	"Bitcask_go/index"
+	"Bitcask_go/util"
 	"io"
 	"os"
 	"sort"
@@ -157,8 +157,8 @@ func (db *DB) Delete(key []byte) error {
 
 // 追加日志记录到活跃文件中
 func (db *DB) appendLogRecord(logRecord *data.LogRecord) (*data.LogRecordPos, error) {
-	db.mutex.Lock()
-	defer db.mutex.Unlock()
+	// db.mutex.Lock()
+	// defer db.mutex.Unlock()
 
 	//判断当前是否有活跃文件，如果没有，则创建一个
 	if db.activeFile == nil {
@@ -236,7 +236,7 @@ func (db *DB) loadDataFiles() error {
 	if err != nil {
 		return err
 	}
-    
+
 	//用于存放所有的文件id
 	var fds []int
 	//遍历这个目录下的所有文件，找到以.data结尾的文件
