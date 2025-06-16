@@ -24,7 +24,7 @@ func main() {
 		panic(err)
 	}
 
-	fmt.Println("val=", string(val))
+	fmt.Println("val = ", string(val))
 
 	err = db.Delete([]byte("name"))
 	if err != nil {

@@ -70,8 +70,8 @@ func (db *DB) Put(key, value []byte) error {
 		Type:  data.LogRecordNormal,
 	}
 
-	db.mutex.Lock()
-	defer db.mutex.Unlock()
+	// db.mutex.Lock()   //写锁不可重入
+	// defer db.mutex.Unlock()
 
 	//追加写入到磁盘的活跃文件中
 	pos, err := db.appendLogRecord(log_record)
