@@ -27,6 +27,9 @@ func TestOpenDataFile(t *testing.T) {
 }
 
 func TestDataFile_Write(t *testing.T) {
+	fileName := filepath.Join(os.TempDir(), fmt.Sprintf("%09d", 111)+data.DataFileSuffix)
+	err := os.Remove(fileName)
+	assert.Nil(t, err)
 	dataFile1, err := data.OpenDataFile(os.TempDir(), 111)
 	assert.Nil(t, err)
 	assert.NotNil(t, dataFile1)
@@ -42,6 +45,9 @@ func TestDataFile_Write(t *testing.T) {
 }
 
 func TestDataFile_Close(t *testing.T) {
+	fileName := filepath.Join(os.TempDir(), fmt.Sprintf("%09d", 111)+data.DataFileSuffix)
+	err := os.Remove(fileName)
+	assert.Nil(t, err)
 	dataFile1, err := data.OpenDataFile(os.TempDir(), 111)
 	assert.Nil(t, err)
 	assert.NotNil(t, dataFile1)
@@ -54,6 +60,9 @@ func TestDataFile_Close(t *testing.T) {
 }
 
 func TestDataFile_Sync(t *testing.T) {
+	fileName := filepath.Join(os.TempDir(), fmt.Sprintf("%09d", 111)+data.DataFileSuffix)
+	err := os.Remove(fileName)
+	assert.Nil(t, err)
 	dataFile1, err := data.OpenDataFile(os.TempDir(), 111)
 	assert.Nil(t, err)
 	assert.NotNil(t, dataFile1)

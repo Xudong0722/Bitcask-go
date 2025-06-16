@@ -157,8 +157,8 @@ func (db *DB) Delete(key []byte) error {
 
 // 追加日志记录到活跃文件中
 func (db *DB) appendLogRecord(logRecord *data.LogRecord) (*data.LogRecordPos, error) {
-	// db.mutex.Lock()
-	// defer db.mutex.Unlock()
+	db.mutex.Lock()
+	defer db.mutex.Unlock()
 
 	//判断当前是否有活跃文件，如果没有，则创建一个
 	if db.activeFile == nil {
