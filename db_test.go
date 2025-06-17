@@ -47,7 +47,7 @@ func TestDB_Put(t *testing.T) {
 	assert.Nil(t, err)
 	assert.NotNil(t, db)
 
-	// 1.正常 Put 一条数据
+	//1.正常 Put 一条数据
 	err = db.Put(util.GetTestKey(1), util.RandomValue(24))
 	assert.Nil(t, err)
 	val1, err := db.Get(util.GetTestKey(1))

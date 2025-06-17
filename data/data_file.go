@@ -87,7 +87,7 @@ func (df *DataFile) ReadLogRecord(offset int64) (*LogRecord, int64, error) {
 
 	logRecord := &LogRecord{Type: header.recordType}
 
-	if keySize > 0 && valueSize > 0 {
+	if keySize > 0 || valueSize > 0 {
 		kvData, err := df.readBytes(keySize+valueSize, offset+headerSize)
 		if err != nil {
 			return nil, 0, err
@@ -96,10 +96,11 @@ func (df *DataFile) ReadLogRecord(offset int64) (*LogRecord, int64, error) {
 		logRecord.Key = kvData[:keySize]
 		logRecord.Value = kvData[keySize:]
 	}
-
+	//fmt.Printf("[ReadLogRecord], header size:%d, keySize:%d, valueSize:%d, key:%s, value:%s\n", headerSize, keySize, valueSize, string(logRecord.Key), string(logRecord.Value))
 	//检验数据有效性, 注意headerBuf是按最大长度取得，所以我们这里要取有效部分
 	crc := getLogRecordCRC(logRecord, headerBuf[crc32.Size:headerSize])
 	if crc != header.crc {
+		//fmt.Printf("crc:%d, header crc:%d", crc, header.crc)
 		return nil, 0, util.ErrInvalidCRC
 	}
 

@@ -103,6 +103,8 @@ func (db *DB) Get(key []byte) ([]byte, error) {
 		return nil, util.ErrKeyNotFound
 	}
 
+	//fmt.Printf("[Get], fid:%d, offset:%d\n", pos.Fid, pos.Offset)
+
 	//根据LogRecordPos从数据文件中读取对应的LogRecord
 	var data_file *data.DataFile
 	if db.activeFile.Fid == pos.Fid {
@@ -170,6 +172,8 @@ func (db *DB) appendLogRecord(logRecord *data.LogRecord) (*data.LogRecordPos, er
 	//对数据进行编码，返回byte[]
 	encRecord, len := data.EncodeLogRecord(logRecord)
 
+	//.Print(encRecord) //Debug info
+
 	//如果写入的文件已经不能够容纳新的记录，则将当前活跃文件关闭，并创建一个新的活跃文件
 	if db.activeFile.WriteOffset+len > db.configuration.DataFileMaxSize {
 		//将当前活跃文件写入到磁盘中
@@ -205,6 +209,7 @@ func (db *DB) appendLogRecord(logRecord *data.LogRecord) (*data.LogRecordPos, er
 		Fid:    db.activeFile.Fid,
 		Offset: writeOff,
 	}
+	//fmt.Printf("fid:%d, offset:%d\n", db.activeFile.Fid, writeOff)
 	return pos, nil
 }
 
