@@ -138,7 +138,7 @@ func (db *DB) Delete(key []byte) error {
 
 	//如果key不存在，直接返回
 	if pos := db.index.Get(key); pos == nil {
-		return util.ErrKeyNotFound
+		return nil
 	}
 
 	//先构造一条删除记录，追加写入DB
