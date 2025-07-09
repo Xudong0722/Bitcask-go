@@ -47,3 +47,27 @@ type Item struct {
 func (i *Item) Less(bi btree.Item) bool {
 	return bytes.Compare(i.key, bi.(*Item).key) == -1
 }
+
+// Iterator 索引迭代器接口
+type Iterator interface {
+	//Rewind 重置迭代器
+	Rewind()
+
+	//Seek 根据key查找第一个大于(或小于)等于key的元素
+	Seek(key []byte)
+
+	//Next 移动到下一个元素
+	Next()
+
+	//Valid 是否有效
+	Valid() bool
+
+	//Key 获取当前元素的key
+	Key() []byte
+
+	//Value 获取当前元素的位置信息
+	Value() *data.LogRecordPos
+
+	//Close 关闭迭代器
+	Close()
+}
