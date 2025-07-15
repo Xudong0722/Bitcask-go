@@ -17,6 +17,9 @@ type Indexer interface {
 
 	// Delete 删除索引中key对应的位置信息
 	Delete(key []byte) bool
+
+	// Iterator 获取索引迭代器
+	Iterator(reverse bool) Iterator
 }
 
 type IndexerType = int8

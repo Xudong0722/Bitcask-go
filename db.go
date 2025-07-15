@@ -99,6 +99,11 @@ func (db *DB) Get(key []byte) ([]byte, error) {
 
 	//先从内存索引中获取对应的LogRecordPos
 	pos := db.index.Get(key)
+	return db.GetValueByPosition(pos)
+}
+
+// 根据LogRecordPos获取对应的Value
+func (db *DB) GetValueByPosition(pos *data.LogRecordPos) ([]byte, error) {
 	if pos == nil {
 		return nil, util.ErrKeyNotFound
 	}

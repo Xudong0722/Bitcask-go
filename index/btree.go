@@ -48,6 +48,12 @@ func (bt *BTree) Delete(key []byte) bool {
 	return btree_item != nil
 }
 
+func (bt *BTree) Iterator(reverse bool) Iterator {
+	bt.lock.RLock()
+	defer bt.lock.RUnlock()
+	return newBTreeIterator(bt.tree, reverse)
+}
+
 type btreeIterator struct {
 	currIndex int     //当前索引的下标
 	reverse   bool    //是否反向迭代
@@ -94,4 +100,30 @@ func (it *btreeIterator) Seek(key []byte) {
 			return bytes.Compare(it.values[i].key, key) >= 0
 		})
 	}
+}
+
+func (it *btreeIterator) Next() {
+	it.currIndex += 1
+}
+
+func (it *btreeIterator) Valid() bool {
+	return it.currIndex >= 0 && it.currIndex < len(it.values)
+}
+
+func (it *btreeIterator) Key() []byte {
+	if it.Valid() {
+		return it.values[it.currIndex].key
+	}
+	return nil
+}
+
+func (it *btreeIterator) Value() *data.LogRecordPos {
+	if it.Valid() {
+		return it.values[it.currIndex].pos
+	}
+	return nil
+}
+func (it *btreeIterator) Close() {
+	it.values = nil // 清理迭代器中的数据
+	it.currIndex = 0
 }

@@ -22,6 +22,12 @@ func CheckCfg(cfg Configuration) error {
 	return nil
 }
 
+// IteratorOptions 索引迭代器配置
+type IteratorOptions struct {
+	Prefix  []byte //遍历前缀和为指定值的Key，默认为空
+	Reverse bool   //是否反向迭代
+}
+
 type IndexerType = int8
 
 const (
@@ -34,4 +40,9 @@ var DefaultOptions = Configuration{
 	DataFileMaxSize: 256 * 1024 * 1024, //256MB
 	SyncWrites:      false,
 	IndexerType:     Btree,
+}
+
+var DefaultIteratorOptions = IteratorOptions{
+	Prefix:  nil,
+	Reverse: false,
 }
