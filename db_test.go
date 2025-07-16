@@ -308,21 +308,21 @@ func TestDB_Close(t *testing.T) {
 	assert.Nil(t, err)
 }
 
-// func TestDB_Sync(t *testing.T) {
-// 	opts := config.DefaultOptions
-// 	dir, _ := os.MkdirTemp("", "bitcask-go-sync")
-// 	opts.DataDir = dir
-// 	db, err := Open(opts)
-// 	defer destroyDB(db)
-// 	assert.Nil(t, err)
-// 	assert.NotNil(t, db)
+func TestDB_Sync(t *testing.T) {
+	opts := config.DefaultOptions
+	dir, _ := os.MkdirTemp("", "bitcask-go-sync")
+	opts.DataDir = dir
+	db, err := Open(opts)
+	defer destroyDB(db)
+	assert.Nil(t, err)
+	assert.NotNil(t, db)
 
-// 	err = db.Put(util.GetTestKey(11), util.RandomValue(20))
-// 	assert.Nil(t, err)
+	err = db.Put(util.GetTestKey(11), util.RandomValue(20))
+	assert.Nil(t, err)
 
-// 	err = db.Sync()
-// 	assert.Nil(t, err)
-// }
+	err = db.Sync()
+	assert.Nil(t, err)
+}
 
 // func TestDB_FileLock(t *testing.T) {
 // 	opts := config.DefaultOptions
