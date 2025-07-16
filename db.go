@@ -57,6 +57,48 @@ func Open(cfg config.Configuration) (*DB, error) {
 	return db, nil
 }
 
+// Close 关闭DB，释放资源
+func (db *DB) Close() error {
+	if db.activeFile == nil {
+		return nil
+	}
+
+	db.mutex.Lock()
+	defer db.mutex.Unlock()
+
+	//关闭活跃文件
+	if err := db.activeFile.Close(); err != nil {
+		return err
+	}
+
+	//关闭所有旧文件
+	for _, of := range db.olderFiles {
+		if of != nil {
+			if err := of.Close(); err != nil {
+				return err
+			}
+		}
+	}
+
+	return nil
+}
+
+// Sync 持久化数据
+func (db *DB) Sync() error {
+	if db.activeFile == nil {
+		return nil
+	}
+
+	db.mutex.Lock()
+	defer db.mutex.Unlock()
+
+	//同步活跃文件到磁盘
+	if err := db.activeFile.Sync(); err != nil {
+		return err
+	}
+	return nil
+}
+
 // 写入数据到DB中， key不能为空
 func (db *DB) Put(key, value []byte) error {
 	if len(key) == 0 {
@@ -133,6 +175,39 @@ func (db *DB) GetValueByPosition(pos *data.LogRecordPos) ([]byte, error) {
 	}
 
 	return log_record.Value, nil
+}
+
+// ListKyes 获取所有的key
+func (db *DB) ListKeys() [][]byte {
+	keys := make([][]byte, db.index.Size())
+	iterator := db.index.Iterator(false)
+
+	var idx int
+	for iterator.Rewind(); iterator.Valid(); iterator.Next() {
+		keys[idx] = iterator.Key()
+		idx++
+	}
+	return keys
+}
+
+// Fold 遍历所有的key，执行fn函数. 如果fn返回false，则停止遍历
+func (db *DB) Fold(fn func(key []byte, value []byte) bool) error {
+	db.mutex.RLock()
+	defer db.mutex.RUnlock()
+
+	iterator := db.index.Iterator(false)
+	for iterator.Rewind(); iterator.Valid(); iterator.Next() {
+		key := iterator.Key()
+		value, err := db.GetValueByPosition(iterator.Value())
+		if err != nil {
+			return err
+		}
+
+		if !fn(key, value) {
+			break
+		}
+	}
+	return nil
 }
 
 // 删除某条数据

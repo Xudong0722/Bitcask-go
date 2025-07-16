@@ -48,6 +48,10 @@ func (bt *BTree) Delete(key []byte) bool {
 	return btree_item != nil
 }
 
+func (bt *BTree) Size() int {
+	return bt.tree.Len()
+}
+
 func (bt *BTree) Iterator(reverse bool) Iterator {
 	bt.lock.RLock()
 	defer bt.lock.RUnlock()
