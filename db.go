@@ -20,6 +20,7 @@ type DB struct {
 	configuration config.Configuration      //用户配置项
 	index         index.Indexer             //内存索引, [key, LogRecordPos]
 	fds           []int                     //已排序的文件id，只用于加载索引
+	seqNo         uint64                    //事务序列号，全局递增
 }
 
 // 通过配置项构造一个DB
