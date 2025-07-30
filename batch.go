@@ -4,6 +4,7 @@ import (
 	"Bitcask_go/config"
 	"Bitcask_go/data"
 	"Bitcask_go/util"
+	"encoding/binary"
 	"sync"
 	"sync/atomic"
 )
@@ -78,15 +79,51 @@ func (wb *WriteBatch) Commit() error {
 	wb.db.mutex.Lock()
 	defer wb.db.mutex.Unlock()
 
-	seqNo := atomic.AddUint64(&wb.db.seqNo, 1) //事务序列号，全局递增
+	//获取当前最新的事务序列号
+	seqNo := atomic.AddUint64(&wb.db.seqNo, 1)
+
+	// 将数据写入到data file中
+	positions := make(map[string]*data.LogRecordPos)
+
+	for _, record := range wb.pendingWrites {
+		//写入到datafile中，注意这里使用无锁版本，前面已经加锁了
+		logRecordPos, err := wb.db.appendLogRecord(&data.LogRecord{
+			Key:   logReocordKeyWithSeq(record.Key, seqNo),
+			Value: record.Value,
+			Type:  record.Type,
+		})
+
+		if err != nil {
+			return err
+		}
+
+		positions[string(record.Key)] = logRecordPos
+	}
+
+	//更新内存索引
+
+}
+
+func logReocordKeyWithSeq(key []byte, seqNo uint64) []byte {
+	seq := make([]byte, binary.MaxVarintLen64)
+	n := binary.PutUvarint(seq[:], seqNo)
+
+	encKey := make([]byte, n+len(key))
+	copy(encKey[:n], seq[:n])
+	copy(encKey[n:], key)
+
+	return encKey
+}
+
+func parseLogRecordKeyWithSeq(key []byte, seq uint64) []byte {
 
 }
 
 /*
 TOOD
-1.将key和seqNo一起编码
+1.将key和seqNo一起编码 -done
 2.将事务中的数据写到数据文件中之后要添加一条标记记录，记录此事务的seqNo是有效的
-3.appendLogRecord要有个不加锁版本，可重入问题
+3.appendLogRecord要有个不加锁版本，可重入问题 -done
 4.看配置决定是否要同步到磁盘
 5.写完数据要更新内存索引
 6.db加载后更新内存索引时要看下事务的seqNo

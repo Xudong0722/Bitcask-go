@@ -117,7 +117,7 @@ func (db *DB) Put(key, value []byte) error {
 	// defer db.mutex.Unlock()
 
 	//追加写入到磁盘的活跃文件中
-	pos, err := db.appendLogRecord(log_record)
+	pos, err := db.appendLogRecordWithLock(log_record)
 
 	if err != nil {
 		return err
@@ -224,7 +224,7 @@ func (db *DB) Delete(key []byte) error {
 
 	//先构造一条删除记录，追加写入DB
 	logRecord := data.LogRecord{Key: key, Type: data.LogRecordDeleted}
-	_, err := db.appendLogRecord(&logRecord)
+	_, err := db.appendLogRecordWithLock(&logRecord)
 	if err != nil {
 		return util.ErrDataDeleteFailed
 	}
@@ -238,11 +238,16 @@ func (db *DB) Delete(key []byte) error {
 	return nil
 }
 
-// 追加日志记录到活跃文件中
-func (db *DB) appendLogRecord(logRecord *data.LogRecord) (*data.LogRecordPos, error) {
+// 追加日志记录到活跃文件中 - 有锁版本
+func (db *DB) appendLogRecordWithLock(logRecord *data.LogRecord) (*data.LogRecordPos, error) {
 	db.mutex.Lock()
 	defer db.mutex.Unlock()
 
+	return db.appendLogRecord(logRecord)
+}
+
+// 追加日志记录到活跃文件中 - 无锁版本
+func (db *DB) appendLogRecord(logRecord *data.LogRecord) (*data.LogRecordPos, error) {
 	//判断当前是否有活跃文件，如果没有，则创建一个
 	if db.activeFile == nil {
 		if err := db.setActiveDataFile(); err != nil {
