@@ -81,3 +81,17 @@ func (wb *WriteBatch) Commit() error {
 	seqNo := atomic.AddUint64(&wb.db.seqNo, 1) //事务序列号，全局递增
 
 }
+
+/*
+TOOD
+1.将key和seqNo一起编码
+2.将事务中的数据写到数据文件中之后要添加一条标记记录，记录此事务的seqNo是有效的
+3.appendLogRecord要有个不加锁版本，可重入问题
+4.看配置决定是否要同步到磁盘
+5.写完数据要更新内存索引
+6.db加载后更新内存索引时要看下事务的seqNo
+7.
+
+
+
+*/
