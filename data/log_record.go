@@ -10,6 +10,7 @@ type LogRecordType = byte
 const (
 	LogRecordNormal LogRecordType = iota // Normal log record
 	LogRecordDeleted
+	LogRecordFinished
 )
 
 // crc32(4) type(1) KeySize(5) ValueSize(5) = 15
@@ -33,6 +34,12 @@ type LogRecordHeader struct {
 type LogRecordPos struct {
 	Fid    uint32 //表示数据存储在哪个文件中
 	Offset int64  //表示数据存储在文件中的偏移量
+}
+
+// TransactionRecord 用于在数据库启动后加载索引时暂存没有确定是否完成的事务项
+type TransactionRecord struct {
+	Record *LogRecord
+	Pos    *LogRecordPos
 }
 
 // 将LogRecord序列化成字节数组

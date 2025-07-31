@@ -9,6 +9,10 @@ import (
 	"sync/atomic"
 )
 
+var finishKey = []byte("fin-key")
+
+const nonTransactionSeqNo uint64 = 0
+
 type WriteBatch struct {
 	options       config.WriteBatchOptions   //配置项
 	mu            *sync.Mutex                //互斥锁，多个线程如果使用一个WriteBatch去写，保证线程安全
@@ -20,7 +24,7 @@ func (db *DB) NewWriteBatch(opts config.WriteBatchOptions) *WriteBatch {
 	return &WriteBatch{
 		options:       opts,
 		mu:            new(sync.Mutex),
-		pendingWrites: map[string]*data.LogRecord,
+		pendingWrites: make(map[string]*data.LogRecord),
 		db:            db,
 	}
 }
@@ -88,7 +92,7 @@ func (wb *WriteBatch) Commit() error {
 	for _, record := range wb.pendingWrites {
 		//写入到datafile中，注意这里使用无锁版本，前面已经加锁了
 		logRecordPos, err := wb.db.appendLogRecord(&data.LogRecord{
-			Key:   logReocordKeyWithSeq(record.Key, seqNo),
+			Key:   logRecordKeyWithSeq(record.Key, seqNo),
 			Value: record.Value,
 			Type:  record.Type,
 		})
@@ -100,11 +104,41 @@ func (wb *WriteBatch) Commit() error {
 		positions[string(record.Key)] = logRecordPos
 	}
 
-	//更新内存索引
+	//写一条标记事务完成的record
+	finishedRecord := &data.LogRecord{
+		Key:  logRecordKeyWithSeq(finishKey, seqNo),
+		Type: data.LogRecordFinished,
+	}
 
+	if _, err := wb.db.appendLogRecord(finishedRecord); err != nil {
+		return err
+	}
+
+	//根据配置决定当前是否要同步到磁盘
+	if wb.options.SyncWrite && wb.db.activeFile != nil {
+		if err := wb.db.activeFile.Sync(); err != nil {
+			return err
+		}
+	}
+
+	//更新内存索引
+	for _, record := range wb.pendingWrites {
+		logRecordPos := positions[string(record.Key)]
+		if record.Type == data.LogRecordNormal {
+			wb.db.index.Put(record.Key, logRecordPos)
+		} else if record.Type == data.LogRecordDeleted {
+			wb.db.index.Delete(record.Key)
+		}
+	}
+
+	// 清空暂存数据
+	wb.pendingWrites = make(map[string]*data.LogRecord)
+
+	return nil
 }
 
-func logReocordKeyWithSeq(key []byte, seqNo uint64) []byte {
+// 将key和序列号
+func logRecordKeyWithSeq(key []byte, seqNo uint64) []byte {
 	seq := make([]byte, binary.MaxVarintLen64)
 	n := binary.PutUvarint(seq[:], seqNo)
 
@@ -115,20 +149,8 @@ func logReocordKeyWithSeq(key []byte, seqNo uint64) []byte {
 	return encKey
 }
 
-func parseLogRecordKeyWithSeq(key []byte, seq uint64) []byte {
-
+func parseLogRecordKeyWithSeq(key []byte) ([]byte, uint64) {
+	seqNo, n := binary.Uvarint(key)
+	realKey := key[n:]
+	return realKey, seqNo
 }
-
-/*
-TOOD
-1.将key和seqNo一起编码 -done
-2.将事务中的数据写到数据文件中之后要添加一条标记记录，记录此事务的seqNo是有效的
-3.appendLogRecord要有个不加锁版本，可重入问题 -done
-4.看配置决定是否要同步到磁盘
-5.写完数据要更新内存索引
-6.db加载后更新内存索引时要看下事务的seqNo
-7.
-
-
-
-*/

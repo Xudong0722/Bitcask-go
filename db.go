@@ -43,6 +43,7 @@ func Open(cfg config.Configuration) (*DB, error) {
 		olderFiles:    make(map[uint32]*data.DataFile),
 		configuration: cfg,
 		index:         index.NewIndexer(cfg.IndexerType),
+		seqNo:         0,
 	}
 
 	//从磁盘中加载所有的数据文件
@@ -108,7 +109,7 @@ func (db *DB) Put(key, value []byte) error {
 
 	//构造一个LogRecord，准备写入到磁盘的数据文件中
 	log_record := &data.LogRecord{
-		Key:   key,
+		Key:   logRecordKeyWithSeq(key, nonTransactionSeqNo),
 		Value: value,
 		Type:  data.LogRecordNormal,
 	}
@@ -223,7 +224,10 @@ func (db *DB) Delete(key []byte) error {
 	}
 
 	//先构造一条删除记录，追加写入DB
-	logRecord := data.LogRecord{Key: key, Type: data.LogRecordDeleted}
+	logRecord := data.LogRecord{
+		Key:  logRecordKeyWithSeq(key, nonTransactionSeqNo),
+		Type: data.LogRecordDeleted}
+
 	_, err := db.appendLogRecordWithLock(&logRecord)
 	if err != nil {
 		return util.ErrDataDeleteFailed
@@ -368,11 +372,28 @@ func (db *DB) loadDataFiles() error {
 	return nil
 }
 
+// 从datafile中构造出索引
 func (db *DB) LoadIndexFromDataFiles() error {
 	//如果没有文件，说明db是空的
 	if len(db.fds) == 0 {
 		return nil
 	}
+	var currentSeqNo = nonTransactionSeqNo
+	updateIndex := func(key []byte, typ data.LogRecordType, pos *data.LogRecordPos) {
+		var ok bool
+
+		if typ == data.LogRecordDeleted {
+			ok = db.index.Delete(key)
+		} else if typ == data.LogRecordNormal {
+			ok = db.index.Put(key, pos)
+		}
+
+		if !ok {
+			panic("failed to udpate index at startup")
+		}
+	}
+
+	transactionReocrds := make(map[uint64][]*data.TransactionRecord)
 
 	//严格按照时间顺序构建索引
 	for _, _fid := range db.fds {
@@ -397,19 +418,34 @@ func (db *DB) LoadIndexFromDataFiles() error {
 			}
 
 			//构造索引中的记录
-			logRecordPos := data.LogRecordPos{Fid: fid, Offset: offset}
-			var ok bool
-			if logRecord.Type == data.LogRecordDeleted {
-				//如果是要删除的，删除之前插入的索引
-				ok = db.index.Delete(logRecord.Key)
+			logRecordPos := &data.LogRecordPos{Fid: fid, Offset: offset}
+
+			//解析key，拿到对应的事务序列号
+			realKey, seqNo := parseLogRecordKeyWithSeq(logRecord.Key)
+
+			if seqNo != nonTransactionSeqNo {
+				//如果是普通的插入删除，直接处理即可
+				updateIndex(realKey, logRecord.Type, logRecordPos)
 			} else {
-				ok = db.index.Put(logRecord.Key, &logRecordPos)
-			}
+				//如果事务完成， 对应的seqNo的数据都可以更新到索引中
+				if logRecord.Type == data.LogRecordFinished {
+					for _, transReocrd := range transactionReocrds[seqNo] {
+						updateIndex(transReocrd.Record.Key, transReocrd.Record.Type, transReocrd.Pos)
+					}
+					delete(transactionReocrds, seqNo)
+				} else {
+					//待定，先暂存
+					logRecord.Key = realKey
+					transactionReocrds[seqNo] = append(transactionReocrds[seqNo], &data.TransactionRecord{
+						Record: logRecord,
+						Pos:    logRecordPos,
+					})
+				}
 
-			if !ok {
-				return util.ErrIndexUpdateFailed
 			}
-
+			if seqNo > currentSeqNo {
+				currentSeqNo = seqNo
+			}
 			//偏移量移动当前LogRecord大小
 			offset += size
 		}
@@ -419,5 +455,8 @@ func (db *DB) LoadIndexFromDataFiles() error {
 			db.activeFile.WriteOffset = offset
 		}
 	}
+
+	//更新事务序列号
+	db.seqNo = currentSeqNo
 	return nil
 }
