@@ -1,6 +1,6 @@
 module Bitcask_go
 
-go 1.24.3
+go 1.24
 
 require (
 	github.com/google/btree v1.1.3

@@ -381,13 +381,14 @@ func (db *DB) LoadIndexFromDataFiles() error {
 	var currentSeqNo = nonTransactionSeqNo
 	updateIndex := func(key []byte, typ data.LogRecordType, pos *data.LogRecordPos) {
 		var ok bool
+		//fmt.Println("LoadIndexFromDataFiles", typ)
 
 		if typ == data.LogRecordDeleted {
 			ok = db.index.Delete(key)
-		} else if typ == data.LogRecordNormal {
+		} else {
 			ok = db.index.Put(key, pos)
 		}
-
+		//fmt.Println("LoadIndexFromDataFiles", ok)
 		if !ok {
 			panic("failed to udpate index at startup")
 		}
@@ -423,8 +424,10 @@ func (db *DB) LoadIndexFromDataFiles() error {
 			//解析key，拿到对应的事务序列号
 			realKey, seqNo := parseLogRecordKeyWithSeq(logRecord.Key)
 
-			if seqNo != nonTransactionSeqNo {
-				//如果是普通的插入删除，直接处理即可
+			//fmt.Printf("LoadIndexFromDataFiles, index size:%d, seqNo:%d, record type:%d\n", db.index.Size(), seqNo, logRecord.Type)
+
+			if seqNo == nonTransactionSeqNo {
+				//如果是普通的插入删除(事务序列号为0)，直接处理即可
 				updateIndex(realKey, logRecord.Type, logRecordPos)
 			} else {
 				//如果事务完成， 对应的seqNo的数据都可以更新到索引中

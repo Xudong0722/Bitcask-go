@@ -51,3 +51,8 @@ type WriteBatchOptions struct {
 	MaxBatchNum uint //单频次可写入的最大数量
 	SyncWrite   bool //是否同步到磁盘
 }
+
+var DefaultWriteBatchOptions = WriteBatchOptions{
+	MaxBatchNum: 10000,
+	SyncWrite: true,
+}
