@@ -9,7 +9,11 @@ import (
 	"path/filepath"
 )
 
-const DataFileSuffix = ".data"
+const (
+	DataFileSuffix   = ".data"
+	HintFileName     = "hint-index"
+	MergeFinFileName = "merge-finished"
+)
 
 // DataFile 数据文件
 type DataFile struct {
@@ -21,6 +25,21 @@ type DataFile struct {
 // 打开指定路径的数据文件
 func OpenDataFile(dirPath string, fid uint32) (*DataFile, error) {
 	fileName := filepath.Join(dirPath, fmt.Sprintf("%09d", fid)+DataFileSuffix)
+	return NewDataFile(fileName, fid)
+}
+
+// 打开Hint索引文件
+func OpenHintFile(dirPath string) (*DataFile, error) {
+	fileName := filepath.Join(dirPath, HintFileName)
+	return NewDataFile(fileName, 0)
+}
+
+func OpenMergeFinFile(dirPath string) (*DataFile, error) {
+	fileName := filepath.Join(dirPath, MergeFinFileName)
+	return NewDataFile(fileName, 0)
+}
+
+func NewDataFile(fileName string, fid uint32) (*DataFile, error) {
 	ioManager, err := fio.NewIOManager(fileName)
 	if err != nil {
 		return nil, err
@@ -31,6 +50,16 @@ func OpenDataFile(dirPath string, fid uint32) (*DataFile, error) {
 		WriteOffset: 0,
 		IOManager:   ioManager,
 	}, nil
+}
+
+func (df *DataFile) WriteHintRecord(key []byte, pos *LogRecordPos) error {
+	record := &LogRecord{
+		Key:   key,
+		Value: EncodeLogRecordPos(pos),
+	}
+
+	encRecord, _ := EncodeLogRecord(record)
+	return df.Write(encRecord)
 }
 
 // 同步到磁盘中

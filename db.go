@@ -21,6 +21,7 @@ type DB struct {
 	index         index.Indexer             //内存索引, [key, LogRecordPos]
 	fds           []int                     //已排序的文件id，只用于加载索引
 	seqNo         uint64                    //事务序列号，全局递增
+	isMerging     bool                      //数据库是否正在merge
 }
 
 // 通过配置项构造一个DB
