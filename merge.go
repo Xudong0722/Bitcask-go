@@ -6,6 +6,7 @@ import (
 	"io"
 	"os"
 	"path"
+	"path/filepath"
 	"sort"
 	"strconv"
 )
@@ -161,5 +162,110 @@ func (db *DB) getMergePath() string {
 
 // 加载merge数据目录
 func (db *DB) loadMergeFiles() error {
+	mergePath := db.getMergePath()
+	// 如果当前目录不存在，直接返回
+	if _, err := os.Stat(mergePath); err != nil {
+		return err
+	}
 
+	defer func() {
+		_ = os.RemoveAll(mergePath)
+	}()
+
+	dirEntries, err := os.ReadDir(mergePath)
+	if err != nil {
+		return err
+	}
+
+	//查找表示merge完成的文件
+	var mergeFinished bool
+	var mergeFileNames []string
+	for _, entry := range dirEntries {
+		if entry.Name() == data.MergeFinFileName {
+			mergeFinished = true
+		}
+		mergeFileNames = append(mergeFileNames, entry.Name())
+	}
+
+	//如果没有merge完成直接返回
+	if !mergeFinished {
+		return nil
+	}
+
+	//删除旧的数据文件
+	nonMergeFileId, err := db.getNonMergeFileId(mergePath)
+	if err != nil {
+		return err
+	}
+	var fileId uint32 = 0
+	for ; fileId < nonMergeFileId; fileId++ {
+		fileName := data.GetDataFileName(db.configuration.DataDir, fileId)
+		if _, err := os.Stat(fileName); err == nil {
+			if err := os.Remove(fileName); err != nil {
+				return err
+			}
+		}
+	}
+
+	//将新的数据文件移动到数据目录中
+	for _, fileName := range mergeFileNames {
+		srcPath := filepath.Join(mergePath, fileName)
+		destPath := filepath.Join(db.configuration.DataDir, fileName)
+		if err := os.Rename(srcPath, destPath); err != nil {
+			return nil
+		}
+	}
+	return nil
+}
+
+func (db *DB) getNonMergeFileId(dirPath string) (uint32, error) {
+	mergeFinFile, err := data.OpenMergeFinFile(dirPath)
+	if err != nil {
+		return 0, err
+	}
+
+	record, _, err := mergeFinFile.ReadLogRecord(0)
+	if err != nil {
+		return 0, err
+	}
+
+	nonMergeFileId, err := strconv.Atoi(string(record.Value))
+	if err != nil {
+		return 0, err
+	}
+
+	return uint32(nonMergeFileId), nil
+}
+
+// 从hint文件中加载索引
+func (db *DB) loadIndexFromHintFile() error {
+	// 如果没有hint文件直接返回
+	hintFileName := filepath.Join(db.configuration.DataDir, data.HintFileName)
+	if _, err := os.Stat(hintFileName); os.IsNotExist(err) {
+		return nil
+	}
+
+	// 打开hint索引文件
+	hintFile, err := data.OpenHintFile(db.configuration.DataDir)
+	if err != nil {
+		return err
+	}
+
+	//读取文件中的索引
+	var offset int64 = 0
+	for {
+		logRecord, size, err := hintFile.ReadLogRecord(offset)
+		if err != nil {
+			if err == io.EOF {
+				break
+			}
+			return err
+		}
+
+		//解码拿到对应的LogRecordPos
+		pos := data.DecodeLogRecordPos(logRecord.Key)
+		db.index.Put(logRecord.Key, pos)
+		offset += size
+	}
+	return nil
 }

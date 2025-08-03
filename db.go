@@ -7,6 +7,7 @@ import (
 	"Bitcask_go/util"
 	"io"
 	"os"
+	"path/filepath"
 	"sort"
 	"strconv"
 	"strings"
@@ -47,8 +48,18 @@ func Open(cfg config.Configuration) (*DB, error) {
 		seqNo:         0,
 	}
 
+	// 加载merge数据目录
+	if err := db.loadMergeFiles(); err != nil {
+		return nil, err
+	}
+
 	//从磁盘中加载所有的数据文件
 	if err := db.loadDataFiles(); err != nil {
+		return nil, err
+	}
+
+	//从hint文件中加载索引
+	if err := db.loadIndexFromHintFile(); err != nil {
 		return nil, err
 	}
 
@@ -379,6 +390,18 @@ func (db *DB) LoadIndexFromDataFiles() error {
 	if len(db.fds) == 0 {
 		return nil
 	}
+
+	// 查看是否发生过merge
+	hasMerge, nonMergeFileId := false, uint32(0)
+	mergeFinFileName := filepath.Join(db.configuration.DataDir, data.MergeFinFileName)
+	if _, err := os.Stat(mergeFinFileName); err == nil {
+		fid, err := db.getNonMergeFileId(db.configuration.DataDir)
+		if err != nil {
+			return err
+		}
+		hasMerge = true
+		nonMergeFileId = fid
+	}
 	var currentSeqNo = nonTransactionSeqNo
 	updateIndex := func(key []byte, typ data.LogRecordType, pos *data.LogRecordPos) {
 		var ok bool
@@ -400,6 +423,11 @@ func (db *DB) LoadIndexFromDataFiles() error {
 	//严格按照时间顺序构建索引
 	for _, _fid := range db.fds {
 		var fid = uint32(_fid)
+
+		//如果文件id小于nonMergeFileId, 说明在hint文件中已经加载过索引
+		if hasMerge && fid < nonMergeFileId {
+			continue
+		}
 		var dataFile *data.DataFile
 
 		if fid == db.activeFile.Fid {
