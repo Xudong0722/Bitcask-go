@@ -34,7 +34,7 @@ const (
 	ART
 
 	//跳表索引
-	SkipList
+	SkipListIndex
 )
 
 func NewIndexer(tp IndexerType) Indexer {
@@ -42,9 +42,10 @@ func NewIndexer(tp IndexerType) Indexer {
 	case Btree:
 		return NewBTree(32)
 	case ART:
+		return NewART()
+	case SkipListIndex:
+		//return NewSkipList(util.StringComprator)
 		return nil
-	case SkipList:
-		return NewSkipList(util.StringComprator)
 	default:
 		panic("unsupport indexer type.")
 	}
