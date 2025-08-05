@@ -5,7 +5,7 @@ KV-service with Golang
 ```
 Memory:
         ---------
-        | index | (BTree, ART)
+        | index | (BTree, ART, SkipList)
         ---------
 ------------|-----------------------------------------------------------------------
 Disk:       |
