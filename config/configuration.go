@@ -10,6 +10,7 @@ type Configuration struct {
 	DataFileMaxSize int64       //数据文件的最大大小，单位为字节
 	SyncWrites      bool        //是否同步写入数据到磁盘
 	IndexerType     IndexerType //索引的类型
+	BytesPerSync    uint        //累计写到多少byte后进行持久化
 }
 
 func CheckCfg(cfg Configuration) error {
@@ -42,6 +43,7 @@ var DefaultOptions = Configuration{
 	DataFileMaxSize: 256 * 1024 * 1024, //256MB
 	SyncWrites:      false,
 	IndexerType:     BPTree,
+	BytesPerSync:    0,
 }
 
 var DefaultIteratorOptions = IteratorOptions{

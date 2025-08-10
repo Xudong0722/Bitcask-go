@@ -34,6 +34,7 @@ type DB struct {
 	seqNoFileExists bool                      //存储数据库事务序列号的文件是否存在
 	isInitial       bool                      //是否是第一次使用此数据目录
 	fileLock        *flock.Flock              //文件锁，保证当前数据
+	bytesWrite      uint                      //累计写了多少个字节
 }
 
 // 通过配置项构造一个DB
@@ -386,10 +387,19 @@ func (db *DB) appendLogRecord(logRecord *data.LogRecord) (*data.LogRecordPos, er
 		return nil, err
 	}
 
+	db.bytesWrite += uint(len)
 	//如果配置过写同步磁盘，立即将缓冲区中的数据写入到磁盘中
-	if db.configuration.SyncWrites {
+	var needsync = db.configuration.SyncWrites
+	if !needsync && db.configuration.BytesPerSync > 0 && db.bytesWrite >= db.configuration.BytesPerSync {
+		//判断当前已写入的字节数是否达到阈值
+		needsync = true
+	}
+	if needsync {
 		if err := db.activeFile.Sync(); err != nil {
 			return nil, err
+		}
+		if db.bytesWrite > 0 {
+			db.bytesWrite = 0
 		}
 	}
 
