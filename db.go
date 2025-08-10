@@ -5,6 +5,7 @@ import (
 	"Bitcask_go/data"
 	"Bitcask_go/index"
 	"Bitcask_go/util"
+	"fmt"
 	"io"
 	"os"
 	"path/filepath"
@@ -12,9 +13,14 @@ import (
 	"strconv"
 	"strings"
 	"sync"
+
+	"github.com/gofrs/flock"
 )
 
-const seqNoKey = "seq.no"
+const (
+	seqNoKey     = "seq.no"
+	fileLockName = "flock"
+)
 
 type DB struct {
 	mutex           *sync.RWMutex             //读写锁，保证线程安全
@@ -27,6 +33,7 @@ type DB struct {
 	isMerging       bool                      //数据库是否正在merge
 	seqNoFileExists bool                      //存储数据库事务序列号的文件是否存在
 	isInitial       bool                      //是否是第一次使用此数据目录
+	fileLock        *flock.Flock              //文件锁，保证当前数据
 }
 
 // 通过配置项构造一个DB
@@ -43,6 +50,17 @@ func Open(cfg config.Configuration) (*DB, error) {
 		if err := os.MkdirAll(cfg.DataDir, os.ModePerm); err != nil {
 			return nil, err
 		}
+	}
+
+	//判断当前数据目录是否正在使用
+	fileLock := flock.New(filepath.Join(cfg.DataDir, fileLockName))
+	hold, err := fileLock.TryLock()
+	if err != nil {
+		return nil, err
+	}
+
+	if !hold {
+		return nil, util.ErrDatabaseIsUsing
 	}
 
 	entries, err := os.ReadDir(cfg.DataDir)
@@ -62,6 +80,7 @@ func Open(cfg config.Configuration) (*DB, error) {
 		index:         index.NewIndexer(cfg.IndexerType, cfg.DataDir, cfg.SyncWrites),
 		seqNo:         0,
 		isInitial:     isInitial,
+		fileLock:      fileLock,
 	}
 
 	// 加载merge数据目录
@@ -106,17 +125,23 @@ func Open(cfg config.Configuration) (*DB, error) {
 
 // Close 关闭DB，释放资源
 func (db *DB) Close() error {
+	defer func() {
+		if err := db.fileLock.Unlock(); err != nil {
+			panic(fmt.Sprintf("failed to unlock the directory, %v", err))
+		}
+
+		//BPtree索引类型底层也是一个文件，需要关闭
+		if err := db.index.Close(); err != nil {
+			panic("failed to close index")
+		}
+	}()
+
 	if db.activeFile == nil {
 		return nil
 	}
 
 	db.mutex.Lock()
 	defer db.mutex.Unlock()
-
-	//BPtree索引类型底层也是一个文件，需要关闭
-	if err := db.index.Close(); err != nil {
-		return err
-	}
 
 	//如果是B+树索引，需要将seqNo写入到文件中，后续加载数据文件的话可以从此文件中获取
 	seqNoFile, err := data.OpenSeqNoFile(db.configuration.DataDir)

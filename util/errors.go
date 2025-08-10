@@ -14,4 +14,5 @@ var (
 	ErrInvalidCRC             = errors.New("Invalid crc value, log record maybe corrupted.")
 	ErrExceedMaxBatchNum      = errors.New("Exceed the max batch num.")
 	ErrMergeisInProgress      = errors.New("The merge is in progress, try again later.")
+	ErrDatabaseIsUsing        = errors.New("The database directory is used by another progress")
 )
