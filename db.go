@@ -3,6 +3,7 @@ package Bitcask_go
 import (
 	"Bitcask_go/config"
 	"Bitcask_go/data"
+	"Bitcask_go/fio"
 	"Bitcask_go/index"
 	"Bitcask_go/util"
 	"fmt"
@@ -104,6 +105,13 @@ func Open(cfg config.Configuration) (*DB, error) {
 		//从数据文件构建索引
 		if err := db.LoadIndexFromDataFiles(); err != nil {
 			return nil, err
+		}
+
+		//将文件IO类型重置为标准IO
+		if db.configuration.MMapAtStartup {
+			if err := db.resetIOType(); err != nil {
+				return nil, err
+			}
 		}
 	} else {
 		if err := db.loadSeqNo(); err != nil {
@@ -421,7 +429,7 @@ func (db *DB) setActiveDataFile() error {
 	}
 
 	//打开活跃文件
-	dataFile, err := data.OpenDataFile(db.configuration.DataDir, initialFid)
+	dataFile, err := data.OpenDataFile(db.configuration.DataDir, initialFid, fio.StandardFIO)
 
 	if err != nil {
 		return err
@@ -464,7 +472,11 @@ func (db *DB) loadDataFiles() error {
 
 	//遍历每个id，打开其对应的文件
 	for i, fd := range fds {
-		dataFile, err := data.OpenDataFile(db.configuration.DataDir, uint32(fd))
+		ioType := fio.StandardFIO
+		if db.configuration.MMapAtStartup {
+			ioType = fio.MemoryMap
+		}
+		dataFile, err := data.OpenDataFile(db.configuration.DataDir, uint32(fd), ioType)
 		if err != nil {
 			return err
 		}
@@ -612,4 +624,22 @@ func (db *DB) loadSeqNo() error {
 	db.seqNoFileExists = true
 
 	return os.Remove(fileName)
+}
+
+// 将数据文件的IO类型设置为标准文件IO
+func (db *DB) resetIOType() error {
+	if db.activeFile == nil {
+		return nil
+	}
+
+	if err := db.activeFile.SetIOManager(db.configuration.DataDir, fio.StandardFIO); err != nil {
+		return err
+	}
+
+	for _, dataFile := range db.olderFiles {
+		if err := dataFile.SetIOManager(db.configuration.DataDir, fio.StandardFIO); err != nil {
+			return err
+		}
+	}
+	return nil
 }

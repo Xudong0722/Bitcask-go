@@ -2,6 +2,7 @@ package test
 
 import (
 	"Bitcask_go/data"
+	"Bitcask_go/fio"
 	"fmt"
 	"os"
 	"path/filepath"
@@ -11,15 +12,15 @@ import (
 )
 
 func TestOpenDataFile(t *testing.T) {
-	dataFile1, err := data.OpenDataFile(os.TempDir(), 0)
+	dataFile1, err := data.OpenDataFile(os.TempDir(), 0, fio.StandardFIO)
 	assert.Nil(t, err)
 	assert.NotNil(t, dataFile1)
 
-	dataFile2, err := data.OpenDataFile(os.TempDir(), 111)
+	dataFile2, err := data.OpenDataFile(os.TempDir(), 111, fio.StandardFIO)
 	assert.Nil(t, err)
 	assert.NotNil(t, dataFile2)
 
-	dataFile3, err := data.OpenDataFile(os.TempDir(), 111)
+	dataFile3, err := data.OpenDataFile(os.TempDir(), 111, fio.StandardFIO)
 	assert.Nil(t, err)
 	assert.NotNil(t, dataFile3)
 
@@ -30,7 +31,7 @@ func TestDataFile_Write(t *testing.T) {
 	fileName := filepath.Join(os.TempDir(), fmt.Sprintf("%09d", 111)+data.DataFileSuffix)
 	err := os.Remove(fileName)
 	assert.Nil(t, err)
-	dataFile1, err := data.OpenDataFile(os.TempDir(), 111)
+	dataFile1, err := data.OpenDataFile(os.TempDir(), 111, fio.StandardFIO)
 	assert.Nil(t, err)
 	assert.NotNil(t, dataFile1)
 
@@ -48,7 +49,7 @@ func TestDataFile_Close(t *testing.T) {
 	fileName := filepath.Join(os.TempDir(), fmt.Sprintf("%09d", 111)+data.DataFileSuffix)
 	err := os.Remove(fileName)
 	assert.Nil(t, err)
-	dataFile1, err := data.OpenDataFile(os.TempDir(), 111)
+	dataFile1, err := data.OpenDataFile(os.TempDir(), 111, fio.StandardFIO)
 	assert.Nil(t, err)
 	assert.NotNil(t, dataFile1)
 
@@ -63,7 +64,7 @@ func TestDataFile_Sync(t *testing.T) {
 	fileName := filepath.Join(os.TempDir(), fmt.Sprintf("%09d", 111)+data.DataFileSuffix)
 	err := os.Remove(fileName)
 	assert.Nil(t, err)
-	dataFile1, err := data.OpenDataFile(os.TempDir(), 111)
+	dataFile1, err := data.OpenDataFile(os.TempDir(), 111, fio.StandardFIO)
 	assert.Nil(t, err)
 	assert.NotNil(t, dataFile1)
 
@@ -79,7 +80,7 @@ func TestDataFile_ReadLogRecord(t *testing.T) {
 	err := os.Remove(fileName)
 	assert.Nil(t, err)
 
-	dataFile, err := data.OpenDataFile(os.TempDir(), 111)
+	dataFile, err := data.OpenDataFile(os.TempDir(), 111, fio.StandardFIO)
 	assert.Nil(t, err)
 	assert.NotNil(t, dataFile)
 

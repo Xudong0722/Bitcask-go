@@ -41,18 +41,13 @@ func TestMMap_Read(t *testing.T) {
 	mmapIO2, err := fio.NewMMapIOManager(path)
 	assert.Nil(t, err)
 
-	t.Log(mmapIO2.Size())
-}
-
-func TestMMap_Close(t *testing.T) {
-	path := filepath.Join("/tmp", "a.data")
-	fio, err := fio.NewFileIOManager(path)
-	defer destoryFile(path)
-	defer fio.Close()
-
+	size, err := mmapIO2.Size()
 	assert.Nil(t, err)
-	assert.NotNil(t, fio)
+	assert.Equal(t, int64(9), size)
 
-	err = fio.Close()
+	b2 := make([]byte, 3)
+	n2, err := mmapIO2.Read(b2, 0)
 	assert.Nil(t, err)
+	assert.Equal(t, n2, 3)
+	assert.Equal(t, b2, []byte("123"))
 }

@@ -5,6 +5,7 @@ import (
 	"Bitcask_go/util"
 	"os"
 	"testing"
+	"time"
 
 	"github.com/stretchr/testify/assert"
 )
@@ -398,15 +399,32 @@ func TestDB_FileLock(t *testing.T) {
 // 	assert.NotNil(t, db2)
 // }
 
-//func TestDB_OpenMMap(t *testing.T) {
-//	opts := config.DefaultOptions
-//	opts.DirPath = "/tmp/bitcask-go"
-//	opts.MMapAtStartup = false
-//
-//	now := time.Now()
-//	db, err := Open(opts)
-//	t.Log("open time ", time.Since(now))
-//
-//	assert.Nil(t, err)
-//	assert.NotNil(t, db)
-//}
+func TestDB_BuildLargeDB(t *testing.T) {
+	opts := config.DefaultOptions
+	opts.DataDir = "/tmp/bitcask-go"
+	db, err := Open(opts)
+
+	assert.Nil(t, err)
+	assert.NotNil(t, db)
+
+	for i := 0; i < 1000000; i++ {
+		db.Put(util.GetTestKey(1000+i%131), util.RandomValue(2000+i%131))
+	}
+
+	err = db.Close()
+	assert.Nil(t, err)
+
+}
+
+func TestDB_OpenMMap(t *testing.T) {
+	opts := config.DefaultOptions
+	opts.DataDir = "/tmp/bitcask-go/"
+	opts.MMapAtStartup = false
+
+	now := time.Now()
+	db, err := Open(opts)
+	t.Log("open time ", time.Since(now))
+	t.Log(len(db.olderFiles))
+	assert.Nil(t, err)
+	assert.NotNil(t, db)
+}

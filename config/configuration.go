@@ -11,6 +11,7 @@ type Configuration struct {
 	SyncWrites      bool        //是否同步写入数据到磁盘
 	IndexerType     IndexerType //索引的类型
 	BytesPerSync    uint        //累计写到多少byte后进行持久化
+	MMapAtStartup   bool        //DB启动时是否使用MMap进行加载
 }
 
 func CheckCfg(cfg Configuration) error {
@@ -44,6 +45,7 @@ var DefaultOptions = Configuration{
 	SyncWrites:      false,
 	IndexerType:     BPTree,
 	BytesPerSync:    0,
+	MMapAtStartup:   true,
 }
 
 var DefaultIteratorOptions = IteratorOptions{
