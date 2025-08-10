@@ -165,7 +165,7 @@ func (db *DB) loadMergeFiles() error {
 	mergePath := db.getMergePath()
 	// 如果当前目录不存在，直接返回
 	if _, err := os.Stat(mergePath); err != nil {
-		return err
+		return nil
 	}
 
 	defer func() {
@@ -183,6 +183,10 @@ func (db *DB) loadMergeFiles() error {
 	for _, entry := range dirEntries {
 		if entry.Name() == data.MergeFinFileName {
 			mergeFinished = true
+		}
+		//事务序列号文件不需要参与merge
+		if entry.Name() == data.SeqNoFileName {
+			continue
 		}
 		mergeFileNames = append(mergeFileNames, entry.Name())
 	}

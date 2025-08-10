@@ -38,6 +38,8 @@ func TestDB_Iterator_One_Value(t *testing.T) {
 	assert.Nil(t, err)
 
 	iterator := db.NewIterator(config.DefaultIteratorOptions)
+	defer iterator.Close()
+
 	assert.NotNil(t, iterator)
 	assert.Equal(t, true, iterator.Valid())
 	t.Log(string(iterator.Key()))
@@ -68,6 +70,8 @@ func TestDB_Iterator_Multi_Values(t *testing.T) {
 
 	//1. 正向迭代器
 	iterator1 := db.NewIterator(config.DefaultIteratorOptions)
+	defer iterator1.Close()
+
 	assert.NotNil(t, iterator1)
 	assert.Equal(t, true, iterator1.Valid())
 
@@ -93,7 +97,9 @@ func TestDB_Iterator_Multi_Values(t *testing.T) {
 	//2. 反向迭代器
 	ops := config.DefaultIteratorOptions
 	ops.Reverse = true
+
 	iterator2 := db.NewIterator(ops)
+	defer iterator2.Close()
 
 	assert.NotNil(t, iterator2)
 	assert.Equal(t, true, iterator2.Valid())
@@ -120,7 +126,10 @@ func TestDB_Iterator_Multi_Values(t *testing.T) {
 	//3.指定前缀的迭代器
 	ops.Prefix = []byte("b")
 	ops.Reverse = false
+
 	iterator3 := db.NewIterator(ops)
+	defer iterator3.Close()
+
 	assert.NotNil(t, iterator3)
 	assert.Equal(t, true, iterator3.Valid())
 

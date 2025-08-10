@@ -33,13 +33,15 @@ type IndexerType = int8
 const (
 	Btree IndexerType = iota + 1
 	ART
+	SkipListIndex
+	BPTree
 )
 
 var DefaultOptions = Configuration{
 	DataDir:         os.TempDir(),
 	DataFileMaxSize: 256 * 1024 * 1024, //256MB
 	SyncWrites:      false,
-	IndexerType:     Btree,
+	IndexerType:     BPTree,
 }
 
 var DefaultIteratorOptions = IteratorOptions{
@@ -54,5 +56,5 @@ type WriteBatchOptions struct {
 
 var DefaultWriteBatchOptions = WriteBatchOptions{
 	MaxBatchNum: 10000,
-	SyncWrite: true,
+	SyncWrite:   true,
 }

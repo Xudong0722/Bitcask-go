@@ -14,15 +14,19 @@ import (
 	"sync"
 )
 
+const seqNoKey = "seq.no"
+
 type DB struct {
-	mutex         *sync.RWMutex             //读写锁，保证线程安全
-	activeFile    *data.DataFile            //当前活跃的文件
-	olderFiles    map[uint32]*data.DataFile //旧文件，只能用于读
-	configuration config.Configuration      //用户配置项
-	index         index.Indexer             //内存索引, [key, LogRecordPos]
-	fds           []int                     //已排序的文件id，只用于加载索引
-	seqNo         uint64                    //事务序列号，全局递增
-	isMerging     bool                      //数据库是否正在merge
+	mutex           *sync.RWMutex             //读写锁，保证线程安全
+	activeFile      *data.DataFile            //当前活跃的文件
+	olderFiles      map[uint32]*data.DataFile //旧文件，只能用于读
+	configuration   config.Configuration      //用户配置项
+	index           index.Indexer             //内存索引, [key, LogRecordPos]
+	fds             []int                     //已排序的文件id，只用于加载索引
+	seqNo           uint64                    //事务序列号，全局递增
+	isMerging       bool                      //数据库是否正在merge
+	seqNoFileExists bool                      //存储数据库事务序列号的文件是否存在
+	isInitial       bool                      //是否是第一次使用此数据目录
 }
 
 // 通过配置项构造一个DB
@@ -32,11 +36,22 @@ func Open(cfg config.Configuration) (*DB, error) {
 		return nil, err
 	}
 
+	var isInitial bool
 	//如果用户配置的文件目录不存在，则创建这个目录
 	if _, err := os.Stat(cfg.DataDir); os.IsNotExist(err) {
+		isInitial = true
 		if err := os.MkdirAll(cfg.DataDir, os.ModePerm); err != nil {
 			return nil, err
 		}
+	}
+
+	entries, err := os.ReadDir(cfg.DataDir)
+	if err != nil {
+		return nil, err
+	}
+	//如果目录存在但里面为空，也视为第一次使用
+	if len(entries) == 0 {
+		isInitial = true
 	}
 
 	//初始化 DB
@@ -44,8 +59,9 @@ func Open(cfg config.Configuration) (*DB, error) {
 		mutex:         new(sync.RWMutex),
 		olderFiles:    make(map[uint32]*data.DataFile),
 		configuration: cfg,
-		index:         index.NewIndexer(cfg.IndexerType),
+		index:         index.NewIndexer(cfg.IndexerType, cfg.DataDir, cfg.SyncWrites),
 		seqNo:         0,
+		isInitial:     isInitial,
 	}
 
 	// 加载merge数据目录
@@ -58,14 +74,31 @@ func Open(cfg config.Configuration) (*DB, error) {
 		return nil, err
 	}
 
-	//从hint文件中加载索引
-	if err := db.loadIndexFromHintFile(); err != nil {
-		return nil, err
-	}
+	//如果是B+树索引，不需要从数据文件加载索引了
+	if cfg.IndexerType != config.BPTree {
+		//从hint文件中加载索引
+		if err := db.loadIndexFromHintFile(); err != nil {
+			return nil, err
+		}
 
-	//从数据文件构建索引
-	if err := db.LoadIndexFromDataFiles(); err != nil {
-		return nil, err
+		//从数据文件构建索引
+		if err := db.LoadIndexFromDataFiles(); err != nil {
+			return nil, err
+		}
+	} else {
+		if err := db.loadSeqNo(); err != nil {
+			return nil, err
+		}
+
+		//更新当前活跃数据文件的WriteOffset
+		if db.activeFile != nil {
+			size, err := db.activeFile.IOManager.Size()
+			if err != nil {
+				return nil, err
+			}
+
+			db.activeFile.WriteOffset = size
+		}
 	}
 
 	return db, nil
@@ -79,6 +112,32 @@ func (db *DB) Close() error {
 
 	db.mutex.Lock()
 	defer db.mutex.Unlock()
+
+	//BPtree索引类型底层也是一个文件，需要关闭
+	if err := db.index.Close(); err != nil {
+		return err
+	}
+
+	//如果是B+树索引，需要将seqNo写入到文件中，后续加载数据文件的话可以从此文件中获取
+	seqNoFile, err := data.OpenSeqNoFile(db.configuration.DataDir)
+	if err != nil {
+		return err
+	}
+
+	//构造包含seqNo数据的LogRecord
+	record := &data.LogRecord{
+		Key:   []byte(seqNoKey),
+		Value: []byte(strconv.FormatUint(db.seqNo, 10)),
+	}
+
+	encRecord, _ := data.EncodeLogRecord(record)
+	if err := seqNoFile.Write(encRecord); err != nil {
+		return err
+	}
+
+	if err := seqNoFile.Sync(); err != nil {
+		return err
+	}
 
 	//关闭活跃文件
 	if err := db.activeFile.Close(); err != nil {
@@ -195,6 +254,7 @@ func (db *DB) GetValueByPosition(pos *data.LogRecordPos) ([]byte, error) {
 func (db *DB) ListKeys() [][]byte {
 	keys := make([][]byte, db.index.Size())
 	iterator := db.index.Iterator(false)
+	defer iterator.Close()
 
 	var idx int
 	for iterator.Rewind(); iterator.Valid(); iterator.Next() {
@@ -210,6 +270,7 @@ func (db *DB) Fold(fn func(key []byte, value []byte) bool) error {
 	defer db.mutex.RUnlock()
 
 	iterator := db.index.Iterator(false)
+	defer iterator.Close()
 	for iterator.Rewind(); iterator.Valid(); iterator.Next() {
 		key := iterator.Key()
 		value, err := db.GetValueByPosition(iterator.Value())
@@ -491,4 +552,29 @@ func (db *DB) LoadIndexFromDataFiles() error {
 	//更新事务序列号
 	db.seqNo = currentSeqNo
 	return nil
+}
+
+func (db *DB) loadSeqNo() error {
+	fileName := filepath.Join(db.configuration.DataDir, data.SeqNoFileName)
+	if _, err := os.Stat(fileName); os.IsNotExist(err) {
+		return nil
+	}
+
+	seqNoFile, err := data.OpenSeqNoFile(db.configuration.DataDir)
+	if err != nil {
+		return err
+	}
+	record, _, err := seqNoFile.ReadLogRecord(0)
+	if err != nil {
+		return err
+	}
+
+	seqNo, err := strconv.ParseUint(string(record.Value), 10, 64)
+	if err != nil {
+		return err
+	}
+	db.seqNo = seqNo
+	db.seqNoFileExists = true
+
+	return os.Remove(fileName)
 }

@@ -14,10 +14,10 @@ func TestNewBPlusTree_Put(t *testing.T) {
 	path := filepath.Join(os.TempDir(), "bptree-test")
 	_ = os.MkdirAll(path, os.ModePerm)
 	defer func() {
-		_ = os.Remove(path)
+		_ = os.RemoveAll(path)
 	}()
 
-	tree := index.NewBPTree(path)
+	tree := index.NewBPTree(path, false)
 
 	tree.Put([]byte("abc"), &data.LogRecordPos{Fid: 123, Offset: 999})
 	tree.Put([]byte("123"), &data.LogRecordPos{Fid: 123, Offset: 999})
@@ -28,10 +28,10 @@ func TestNewBPlusTree_Get(t *testing.T) {
 	path := filepath.Join(os.TempDir(), "bptree-test")
 	_ = os.MkdirAll(path, os.ModePerm)
 	defer func() {
-		_ = os.Remove(path)
+		_ = os.RemoveAll(path)
 	}()
 
-	tree := index.NewBPTree(path)
+	tree := index.NewBPTree(path, false)
 
 	pos := tree.Get([]byte("not exist"))
 	assert.Nil(t, pos)
@@ -49,10 +49,10 @@ func TestNewBPlusTree_Delete(t *testing.T) {
 	path := filepath.Join(os.TempDir(), "bptree-test")
 	_ = os.MkdirAll(path, os.ModePerm)
 	defer func() {
-		_ = os.Remove(path)
+		_ = os.RemoveAll(path)
 	}()
 
-	tree := index.NewBPTree(path)
+	tree := index.NewBPTree(path, false)
 
 	res1 := tree.Delete([]byte("not exist"))
 	assert.Equal(t, res1, false)
@@ -70,10 +70,10 @@ func TestNewBPlusTree_Size(t *testing.T) {
 	path := filepath.Join(os.TempDir(), "bptree-test")
 	_ = os.MkdirAll(path, os.ModePerm)
 	defer func() {
-		_ = os.Remove(path)
+		_ = os.RemoveAll(path)
 	}()
 
-	tree := index.NewBPTree(path)
+	tree := index.NewBPTree(path, false)
 
 	res1 := tree.Delete([]byte("not exist"))
 	assert.Equal(t, res1, false)
@@ -89,4 +89,31 @@ func TestNewBPlusTree_Size(t *testing.T) {
 	assert.Nil(t, pos)
 
 	assert.Equal(t, 0, tree.Size())
+}
+
+func TestBplusTree_Iterator(t *testing.T) {
+	path := filepath.Join(os.TempDir(), "bptree-test")
+	_ = os.MkdirAll(path, os.ModePerm)
+	defer func() {
+		_ = os.RemoveAll(path)
+	}()
+
+	tree := index.NewBPTree(path, false)
+
+	tree.Put([]byte("123"), &data.LogRecordPos{Fid: 123, Offset: 999})
+	tree.Put([]byte("321"), &data.LogRecordPos{Fid: 123, Offset: 999})
+	tree.Put([]byte("471"), &data.LogRecordPos{Fid: 123, Offset: 999})
+	tree.Put([]byte("431"), &data.LogRecordPos{Fid: 123, Offset: 999})
+	tree.Put([]byte("312"), &data.LogRecordPos{Fid: 123, Offset: 999})
+	tree.Put([]byte("132"), &data.LogRecordPos{Fid: 123, Offset: 999})
+
+	iter := tree.Iterator(false)
+	for iter.Rewind(); iter.Valid(); iter.Next() {
+		t.Log(string(iter.Key()))
+	}
+
+	iter1 := tree.Iterator(true)
+	for iter1.Rewind(); iter1.Valid(); iter1.Next() {
+		t.Log(string(iter1.Key()))
+	}
 }

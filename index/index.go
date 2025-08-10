@@ -23,6 +23,9 @@ type Indexer interface {
 
 	// Iterator 获取索引迭代器
 	Iterator(reverse bool) Iterator
+
+	// Close 关闭索引(bptree)
+	Close() error
 }
 
 type IndexerType = int8
@@ -35,9 +38,12 @@ const (
 
 	//跳表索引
 	SkipListIndex
+
+	//B+树索引
+	BPTree
 )
 
-func NewIndexer(tp IndexerType) Indexer {
+func NewIndexer(tp IndexerType, dirPath string, sync bool) Indexer {
 	switch tp {
 	case Btree:
 		return NewBTree(32)
@@ -46,6 +52,8 @@ func NewIndexer(tp IndexerType) Indexer {
 	case SkipListIndex:
 		//return NewSkipList(util.StringComprator)
 		return nil
+	case BPTree:
+		return NewBPTree(dirPath, sync)
 	default:
 		panic("unsupport indexer type.")
 	}

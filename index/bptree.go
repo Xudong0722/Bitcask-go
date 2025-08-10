@@ -16,8 +16,10 @@ type BPlusTree struct {
 }
 
 // 初始化B+ 树索引
-func NewBPTree(dirPath string) *BPlusTree {
-	bptree, err := bbolt.Open(filepath.Join(dirPath, bptreeIndexFileName), 0644, nil)
+func NewBPTree(dirPath string, syncWrites bool) *BPlusTree {
+	opts := bbolt.DefaultOptions
+	opts.NoSync = !syncWrites
+	bptree, err := bbolt.Open(filepath.Join(dirPath, bptreeIndexFileName), 0644, opts)
 	if err != nil {
 		panic("failed to open bptree")
 	}
@@ -89,5 +91,76 @@ func (bpt *BPlusTree) Size() int {
 
 // Iterator 获取索引迭代器
 func (bpt *BPlusTree) Iterator(reverse bool) Iterator {
-	return nil
+	return newBptreeIterator(bpt.tree, reverse)
+}
+
+func (bpt *BPlusTree) Close() error {
+	return bpt.tree.Close()
+}
+
+// B+树迭代器
+type bptreeIterator struct {
+	tx        *bbolt.Tx
+	cursor    *bbolt.Cursor
+	reverse   bool
+	currKey   []byte
+	currValue []byte
+}
+
+func newBptreeIterator(tree *bbolt.DB, reverse bool) *bptreeIterator {
+	tx, err := tree.Begin(false)
+	if err != nil {
+		panic("failed to begin a transaction")
+	}
+
+	bpi := bptreeIterator{
+		tx:      tx,
+		cursor:  tx.Bucket(indexBucketName).Cursor(),
+		reverse: reverse,
+	}
+	bpi.Rewind()
+	return &bpi
+}
+
+// Rewind 重置迭代器
+func (bpi *bptreeIterator) Rewind() {
+	if bpi.reverse {
+		bpi.currKey, bpi.currValue = bpi.cursor.Last()
+	} else {
+		bpi.currKey, bpi.currValue = bpi.cursor.First()
+	}
+}
+
+// Seek 根据key查找第一个大于(或小于)等于key的元素
+func (bpi *bptreeIterator) Seek(key []byte) {
+	bpi.currKey, bpi.currValue = bpi.cursor.Seek(key)
+}
+
+// Next 移动到下一个元素
+func (bpi *bptreeIterator) Next() {
+	if bpi.reverse {
+		bpi.currKey, bpi.currValue = bpi.cursor.Prev()
+	} else {
+		bpi.currKey, bpi.currValue = bpi.cursor.Next()
+	}
+}
+
+// Valid 是否有效
+func (bpi *bptreeIterator) Valid() bool {
+	return len(bpi.currKey) != 0
+}
+
+// Key 获取当前元素的key
+func (bpi *bptreeIterator) Key() []byte {
+	return bpi.currKey
+}
+
+// Value 获取当前元素的位置信息
+func (bpi *bptreeIterator) Value() *data.LogRecordPos {
+	return data.DecodeLogRecordPos(bpi.currValue)
+}
+
+// Close 关闭迭代器
+func (bpi *bptreeIterator) Close() {
+	_ = bpi.tx.Rollback()
 }

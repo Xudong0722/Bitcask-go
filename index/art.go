@@ -64,6 +64,10 @@ func (art *AdaptiveRadixTree) Iterator(reverse bool) Iterator {
 	return newARTIterator(art.tree, reverse)
 }
 
+func (art *AdaptiveRadixTree) Close() error {
+	return nil
+}
+
 type artIterator struct {
 	currIndex int     //当前索引的下标
 	reverse   bool    //是否反向迭代

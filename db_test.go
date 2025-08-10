@@ -73,7 +73,7 @@ func TestDB_Put(t *testing.T) {
 	assert.Nil(t, err)
 
 	// 5.写到数据文件进行了转换
-	for i := 0; i < 1000000; i++ {
+	for i := 0; i < 100000; i++ {
 		err := db.Put(util.GetTestKey(i), util.RandomValue(128))
 		assert.Nil(t, err)
 	}

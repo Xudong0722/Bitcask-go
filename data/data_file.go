@@ -13,6 +13,7 @@ const (
 	DataFileSuffix   = ".data"
 	HintFileName     = "hint-index"
 	MergeFinFileName = "merge-finished"
+	SeqNoFileName    = "sequence-number"
 )
 
 // DataFile 数据文件
@@ -36,6 +37,11 @@ func OpenHintFile(dirPath string) (*DataFile, error) {
 
 func OpenMergeFinFile(dirPath string) (*DataFile, error) {
 	fileName := filepath.Join(dirPath, MergeFinFileName)
+	return NewDataFile(fileName, 0)
+}
+
+func OpenSeqNoFile(dirPath string) (*DataFile, error) {
+	fileName := filepath.Join(dirPath, SeqNoFileName)
 	return NewDataFile(fileName, 0)
 }
 
