@@ -6,12 +6,13 @@ import (
 )
 
 type Configuration struct {
-	DataDir         string      //数据文件存放的目录
-	DataFileMaxSize int64       //数据文件的最大大小，单位为字节
-	SyncWrites      bool        //是否同步写入数据到磁盘
-	IndexerType     IndexerType //索引的类型
-	BytesPerSync    uint        //累计写到多少byte后进行持久化
-	MMapAtStartup   bool        //DB启动时是否使用MMap进行加载
+	DataDir            string      //数据文件存放的目录
+	DataFileMaxSize    int64       //数据文件的最大大小，单位为字节
+	SyncWrites         bool        //是否同步写入数据到磁盘
+	IndexerType        IndexerType //索引的类型
+	BytesPerSync       uint        //累计写到多少byte后进行持久化
+	MMapAtStartup      bool        //DB启动时是否使用MMap进行加载
+	DataFileMergeRatio float32     //DB merge的阈值
 }
 
 func CheckCfg(cfg Configuration) error {
@@ -20,6 +21,9 @@ func CheckCfg(cfg Configuration) error {
 	}
 	if cfg.DataFileMaxSize <= 0 {
 		return util.ErrDataFileMaxSizeInvalid
+	}
+	if cfg.DataFileMergeRatio < 0 || cfg.DataFileMergeRatio > 1 {
+		return util.ErrDataMergeRatioInvlid
 	}
 	return nil
 }
@@ -40,12 +44,13 @@ const (
 )
 
 var DefaultOptions = Configuration{
-	DataDir:         os.TempDir(),
-	DataFileMaxSize: 256 * 1024 * 1024, //256MB
-	SyncWrites:      false,
-	IndexerType:     BPTree,
-	BytesPerSync:    0,
-	MMapAtStartup:   true,
+	DataDir:            os.TempDir(),
+	DataFileMaxSize:    256 * 1024 * 1024, //256MB
+	SyncWrites:         false,
+	IndexerType:        BPTree,
+	BytesPerSync:       0,
+	MMapAtStartup:      true,
+	DataFileMergeRatio: 0.5,
 }
 
 var DefaultIteratorOptions = IteratorOptions{

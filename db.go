@@ -36,6 +36,15 @@ type DB struct {
 	isInitial       bool                      //是否是第一次使用此数据目录
 	fileLock        *flock.Flock              //文件锁，保证当前数据
 	bytesWrite      uint                      //累计写了多少个字节
+	reclaimSize     int64                     //表示DB中有多少数据是无效的
+}
+
+// Stat 存储引擎统计信息
+type Stat struct {
+	KeyNum          uint  //key的总数量
+	DataFileNum     uint  //数据文件的总数量
+	ReclaimableSize int64 //merge后可回收的数据大小，单位byte
+	DiskSize        int64 //数据引擎占据磁盘大小
 }
 
 // 通过配置项构造一个DB
@@ -230,8 +239,8 @@ func (db *DB) Put(key, value []byte) error {
 	}
 
 	//写入到磁盘中之后，更新内存中的索引(TODO, 这里会不会写磁盘成功，更新内存失败，造成数据不一致)
-	if ok := db.index.Put(key, pos); !ok {
-		return util.ErrIndexUpdateFailed
+	if oldPos := db.index.Put(key, pos); oldPos != nil {
+		db.reclaimSize += int64(oldPos.Size)
 	}
 
 	return nil
@@ -335,15 +344,20 @@ func (db *DB) Delete(key []byte) error {
 		Key:  logRecordKeyWithSeq(key, nonTransactionSeqNo),
 		Type: data.LogRecordDeleted}
 
-	_, err := db.appendLogRecordWithLock(&logRecord)
+	pos, err := db.appendLogRecordWithLock(&logRecord)
 	if err != nil {
 		return util.ErrDataDeleteFailed
 	}
+	//delete这条记录本身也是可以删除的
+	db.reclaimSize += int64(pos.Size)
 
 	//然后删除内存索引中的记录
-	ok := db.index.Delete(key)
+	oldPos, ok := db.index.Delete(key)
 	if !ok {
 		return util.ErrDataDeleteFailed
+	}
+	if oldPos != nil {
+		db.reclaimSize += int64(oldPos.Size)
 	}
 
 	return nil
@@ -414,6 +428,7 @@ func (db *DB) appendLogRecord(logRecord *data.LogRecord) (*data.LogRecordPos, er
 	pos := &data.LogRecordPos{
 		Fid:    db.activeFile.Fid,
 		Offset: writeOff,
+		Size:   uint32(len),
 	}
 	//fmt.Printf("fid:%d, offset:%d\n", db.activeFile.Fid, writeOff)
 	return pos, nil
@@ -514,11 +529,15 @@ func (db *DB) LoadIndexFromDataFiles() error {
 	updateIndex := func(key []byte, typ data.LogRecordType, pos *data.LogRecordPos) {
 		var ok bool
 		//fmt.Println("LoadIndexFromDataFiles", typ)
-
+		var oldPos *data.LogRecordPos
 		if typ == data.LogRecordDeleted {
-			ok = db.index.Delete(key)
+			oldPos, _ = db.index.Delete(key)
+			db.reclaimSize += int64(pos.Size)
 		} else {
-			ok = db.index.Put(key, pos)
+			oldPos = db.index.Put(key, pos)
+		}
+		if oldPos != nil {
+			db.reclaimSize += int64(oldPos.Size)
 		}
 		//fmt.Println("LoadIndexFromDataFiles", ok)
 		if !ok {
@@ -556,7 +575,7 @@ func (db *DB) LoadIndexFromDataFiles() error {
 			}
 
 			//构造索引中的记录
-			logRecordPos := &data.LogRecordPos{Fid: fid, Offset: offset}
+			logRecordPos := &data.LogRecordPos{Fid: fid, Offset: offset, Size: uint32(size)}
 
 			//解析key，拿到对应的事务序列号
 			realKey, seqNo := parseLogRecordKeyWithSeq(logRecord.Key)
@@ -642,4 +661,25 @@ func (db *DB) resetIOType() error {
 		}
 	}
 	return nil
+}
+
+func (db *DB) Stat() *Stat {
+	db.mutex.RLock()
+	defer db.mutex.RUnlock()
+
+	var dataFiles = uint(len(db.olderFiles))
+	if db.activeFile != nil {
+		dataFiles += 1
+	}
+
+	dirSize, err := util.DirSize(db.configuration.DataDir)
+	if err != nil {
+		panic(fmt.Sprintf("failed to get dir size : %v", err))
+	}
+	return &Stat{
+		KeyNum:          uint(db.index.Size()),
+		DataFileNum:     dataFiles,
+		ReclaimableSize: db.reclaimSize,
+		DiskSize:        dirSize,
+	}
 }

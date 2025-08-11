@@ -32,6 +32,27 @@ func (db *DB) Merge() error {
 		db.isMerging = false
 	}()
 
+	//判断当前是否需要进行merge（是否达到阈值
+	totalSize, err := util.DirSize(db.configuration.DataDir)
+	if err != nil {
+		db.mutex.Unlock()
+		return err
+	}
+	if float32(db.reclaimSize)/float32(totalSize) < db.configuration.DataFileMergeRatio {
+		db.mutex.Unlock()
+		return util.ErrMergeRatioUnreached
+	}
+
+	//判断磁盘剩余空间是否可以完成merge操作
+	availableDiskSize, err := util.AvailableDiskSize()
+	if err != nil {
+		db.mutex.Unlock()
+		return err
+	}
+	if uint64(totalSize-db.reclaimSize) >= availableDiskSize {
+		db.mutex.Unlock()
+		return util.ErrNoEnoughSpaceForMerge
+	}
 	db.isMerging = true
 
 	//将当前活跃文件转换成旧文件，保存到数组中，然后开展merge
@@ -186,6 +207,10 @@ func (db *DB) loadMergeFiles() error {
 		}
 		//事务序列号文件不需要参与merge
 		if entry.Name() == data.SeqNoFileName {
+			continue
+		}
+		//文件锁所在的文件也不需要拷贝
+		if entry.Name() == fileLockName {
 			continue
 		}
 		mergeFileNames = append(mergeFileNames, entry.Name())

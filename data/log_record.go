@@ -34,6 +34,7 @@ type LogRecordHeader struct {
 type LogRecordPos struct {
 	Fid    uint32 //表示数据存储在哪个文件中
 	Offset int64  //表示数据存储在文件中的偏移量
+	Size   uint32 //表示数据的大小
 }
 
 // TransactionRecord 用于在数据库启动后加载索引时暂存没有确定是否完成的事务项
@@ -123,10 +124,11 @@ func getLogRecordCRC(logRecord *LogRecord, header []byte) uint32 {
 
 // 对位置索引信息进行编码
 func EncodeLogRecordPos(pos *LogRecordPos) []byte {
-	buf := make([]byte, binary.MaxVarintLen32+binary.MaxVarintLen64)
+	buf := make([]byte, binary.MaxVarintLen32*2+binary.MaxVarintLen64)
 	var index = 0
 	index += binary.PutVarint(buf[index:], int64(pos.Fid))
 	index += binary.PutVarint(buf[index:], pos.Offset)
+	index += binary.PutVarint(buf[index:], int64(pos.Size))
 	return buf
 }
 
@@ -135,10 +137,13 @@ func DecodeLogRecordPos(buf []byte) *LogRecordPos {
 	index := 0
 	fid, n := binary.Varint(buf[index:])
 	index += n
-	offset, _ := binary.Varint(buf[index:])
+	offset, n := binary.Varint(buf[index:])
+	index += n
+	size, _ := binary.Varint(buf[index:])
 	return &LogRecordPos{
 		Fid:    uint32(fid),
 		Offset: offset,
+		Size:   uint32(size),
 	}
 
 }

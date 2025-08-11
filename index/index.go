@@ -10,13 +10,13 @@ import (
 // Indexer 索引 接口
 type Indexer interface {
 	// Put 向索引中添加key对应的位置信息
-	Put(key []byte, pos *data.LogRecordPos) bool
+	Put(key []byte, pos *data.LogRecordPos) *data.LogRecordPos
 
 	// Get 根据key获取索引中对应的位置信息
 	Get(key []byte) *data.LogRecordPos
 
 	// Delete 删除索引中key对应的位置信息
-	Delete(key []byte) bool
+	Delete(key []byte) (*data.LogRecordPos, bool)
 
 	// Size 获取索引中元素的数量
 	Size() int

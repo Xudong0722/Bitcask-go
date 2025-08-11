@@ -23,11 +23,11 @@ func NewART() *AdaptiveRadixTree {
 }
 
 // Put 向索引中添加key对应的位置信息
-func (art *AdaptiveRadixTree) Put(key []byte, pos *data.LogRecordPos) bool {
+func (art *AdaptiveRadixTree) Put(key []byte, pos *data.LogRecordPos) *data.LogRecordPos {
 	art.lock.Lock()
-	art.tree.Insert(key, pos)
+	oldItem, _ := art.tree.Insert(key, pos)
 	art.lock.Unlock()
-	return true
+	return oldItem.(*data.LogRecordPos)
 }
 
 // Get 根据key获取索引中对应的位置信息
@@ -42,11 +42,11 @@ func (art *AdaptiveRadixTree) Get(key []byte) *data.LogRecordPos {
 }
 
 // Delete 删除索引中key对应的位置信息
-func (art *AdaptiveRadixTree) Delete(key []byte) bool {
+func (art *AdaptiveRadixTree) Delete(key []byte) (*data.LogRecordPos, bool) {
 	art.lock.Lock()
-	_, ok := art.tree.Delete(key)
+	oldItem, ok := art.tree.Delete(key)
 	art.lock.Unlock()
-	return ok
+	return oldItem.(*data.LogRecordPos), ok
 }
 
 // Size 获取索引中元素的数量
