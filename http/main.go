@@ -24,7 +24,7 @@ func init() {
 	}
 }
 
-func HandlePut(writer http.ResponseWriter, request *http.Request) {
+func handlePut(writer http.ResponseWriter, request *http.Request) {
 	if request.Method != http.MethodPost {
 		http.Error(writer, "method not allowed", http.StatusMethodNotAllowed)
 		return
@@ -45,7 +45,7 @@ func HandlePut(writer http.ResponseWriter, request *http.Request) {
 	}
 }
 
-func HandleGet(writer http.ResponseWriter, request *http.Request) {
+func handleGet(writer http.ResponseWriter, request *http.Request) {
 	if request.Method != http.MethodGet {
 		http.Error(writer, "method not allowed", http.StatusMethodNotAllowed)
 		return
@@ -63,10 +63,58 @@ func HandleGet(writer http.ResponseWriter, request *http.Request) {
 	_ = json.NewEncoder(writer).Encode(string(value))
 }
 
+func handleDelete(writer http.ResponseWriter, request *http.Request) {
+	if request.Method != http.MethodDelete {
+		http.Error(writer, "method not allowed", http.StatusMethodNotAllowed)
+		return
+	}
+
+	key := request.URL.Query().Get("key")
+	err := db.Delete([]byte(key))
+	if err != nil && err != util.ErrKeyNotFound {
+		http.Error(writer, err.Error(), http.StatusInternalServerError)
+		log.Printf("failed to delete kv in db: %v\n", err)
+		return
+	}
+
+	writer.Header().Set("Content-Type", "application/json")
+	_ = json.NewEncoder(writer).Encode("OK")
+}
+
+func handleListKeys(writer http.ResponseWriter, request *http.Request) {
+	if request.Method != http.MethodGet {
+		http.Error(writer, "method not allowed", http.StatusMethodNotAllowed)
+		return
+	}
+
+	keys := db.ListKeys()
+	writer.Header().Set("Content-Type", "application/json")
+	var result []string
+	for _, key := range keys {
+		result = append(result, string(key))
+	}
+	_ = json.NewEncoder(writer).Encode(result)
+}
+
+func handleStat(writer http.ResponseWriter, request *http.Request) {
+	if request.Method != http.MethodGet {
+		http.Error(writer, "method not allowed", http.StatusMethodNotAllowed)
+		return
+	}
+
+	stat := db.Stat()
+	writer.Header().Set("Content-Type", "application/json")
+	_ = json.NewEncoder(writer).Encode(stat)
+}
+
 func main() {
 	//register func
-	http.HandleFunc("/bitcask/put", HandlePut)
-	http.HandleFunc("/bitcask/get", HandleGet)
+	http.HandleFunc("/bitcask/put", handlePut)
+	http.HandleFunc("/bitcask/get", handleGet)
+	http.HandleFunc("/bitcask/delete", handleDelete)
+	http.HandleFunc("/bitcask/listkeys", handleListKeys)
+	http.HandleFunc("/bitcask/stat", handleStat)
+
 	// start http service
 	http.ListenAndServe("localhost:8080", nil)
 }
