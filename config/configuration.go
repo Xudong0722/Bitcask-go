@@ -47,7 +47,7 @@ var DefaultOptions = Configuration{
 	DataDir:            os.TempDir(),
 	DataFileMaxSize:    256 * 1024 * 1024, //256MB
 	SyncWrites:         false,
-	IndexerType:        BPTree,
+	IndexerType:        Btree,
 	BytesPerSync:       0,
 	MMapAtStartup:      true,
 	DataFileMergeRatio: 0.5,
