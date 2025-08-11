@@ -374,31 +374,33 @@ func TestDB_Stat(t *testing.T) {
 	assert.NotNil(t, stat)
 }
 
-// func TestDB_Backup(t *testing.T) {
-// 	opts := config.DefaultOptions
-// 	dir, _ := os.MkdirTemp("", "bitcask-go-backup")
-// 	opts.DirPath = dir
-// 	db, err := Open(opts)
-// 	defer destroyDB(db)
-// 	assert.Nil(t, err)
-// 	assert.NotNil(t, db)
+func TestDB_Backup(t *testing.T) {
+	opts := config.DefaultOptions
+	dir, _ := os.MkdirTemp("", "bitcask-go-backup")
+	t.Log(dir)
+	opts.DataDir = dir
+	db, err := Open(opts)
+	defer destroyDB(db)
+	assert.Nil(t, err)
+	assert.NotNil(t, db)
 
-// 	for i := 1; i < 1000000; i++ {
-// 		err := db.Put(util.GetTestKey(i), util.RandomValue(128))
-// 		assert.Nil(t, err)
-// 	}
+	for i := 1; i < 100000; i++ {
+		err := db.Put(util.GetTestKey(i), util.RandomValue(128))
+		assert.Nil(t, err)
+	}
 
-// 	backupDir, _ := os.MkdirTemp("", "bitcask-go-backup-test")
-// 	err = db.Backup(backupDir)
-// 	assert.Nil(t, err)
+	backupDir, _ := os.MkdirTemp("", "bitcask-go-backup-test")
+	t.Log(backupDir)
+	err = db.Backup(backupDir)
+	assert.Nil(t, err)
 
-// 	opts1 := config.DefaultOptions
-// 	opts1.DirPath = backupDir
-// 	db2, err := Open(opts1)
-// 	defer destroyDB(db2)
-// 	assert.Nil(t, err)
-// 	assert.NotNil(t, db2)
-// }
+	opts1 := config.DefaultOptions
+	opts1.DataDir = backupDir
+	db2, err := Open(opts1)
+	defer destroyDB(db2)
+	assert.Nil(t, err)
+	assert.NotNil(t, db2)
+}
 
 func TestDB_BuildLargeDB(t *testing.T) {
 	opts := config.DefaultOptions

@@ -683,3 +683,11 @@ func (db *DB) Stat() *Stat {
 		DiskSize:        dirSize,
 	}
 }
+
+// 备份数据库， 将数据文件拷贝到新的目录中
+func (db *DB) Backup(dir string) error {
+	db.mutex.RLock()
+	defer db.mutex.RUnlock()
+
+	return util.CopyDir(db.configuration.DataDir, dir, []string{fileLockName})
+}
