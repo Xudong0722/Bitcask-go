@@ -63,3 +63,47 @@ func TestRedisData_Del_Type(t *testing.T) {
 	assert.NotNil(t, err)
 
 }
+
+func TestRedisData_Hash(t *testing.T) {
+	opts := config.DefaultOptions
+	dir, _ := os.MkdirTemp("", "bitcask-go-redis-hash")
+	opts.DataDir = dir
+	rdb, err := NewRedisDB(opts)
+	assert.Nil(t, err)
+
+	ok1, err := rdb.HSet(util.GetTestKey(1), []byte("field1"), util.RandomValue(100))
+	assert.Equal(t, ok1, true)
+	assert.Nil(t, err)
+
+	v1 := util.RandomValue(100)
+	ok2, err := rdb.HSet(util.GetTestKey(1), []byte("field1"), v1)
+	assert.Equal(t, ok2, false)
+	assert.Nil(t, err)
+
+	v2 := util.RandomValue(101)
+	ok3, err := rdb.HSet(util.GetTestKey(1), []byte("field2"), v2)
+	assert.Nil(t, err)
+	assert.Equal(t, ok3, true)
+
+	val1, err := rdb.HGet(util.GetTestKey(1), []byte("field1"))
+	assert.Equal(t, val1, v1)
+	assert.Nil(t, err)
+	val2, err := rdb.HGet(util.GetTestKey(1), []byte("field2"))
+	assert.Equal(t, val2, v2)
+	assert.Nil(t, err)
+	val3, err := rdb.HGet(util.GetTestKey(1), []byte("field not exist"))
+	assert.NotNil(t, err)
+	assert.Nil(t, val3)
+
+	del1, err := rdb.HDel(util.GetTestKey(2), nil)
+	assert.Nil(t, err)
+	assert.False(t, del1)
+
+	del2, err := rdb.HDel(util.GetTestKey(1), []byte("field1"))
+	assert.Nil(t, err)
+	assert.True(t, del2)
+
+	val4, err := rdb.HGet(util.GetTestKey(1), []byte("field1"))
+	assert.Nil(t, val4)
+	assert.NotNil(t, err)
+}

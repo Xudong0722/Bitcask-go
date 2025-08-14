@@ -1,0 +1,94 @@
+package redis
+
+import (
+	"encoding/binary"
+	"math"
+)
+
+const (
+	maxMetadataSize   = 1 + binary.MaxVarintLen64*2 + binary.MaxVarintLen32
+	extraListMetaSize = binary.MaxVarintLen64 * 2
+
+	initialListMark = math.MaxUint64 / 2
+)
+
+type metadata struct {
+	dataType byte   // 数据类型
+	expire   int64  // 过期时间
+	version  int64  // 版本号
+	size     uint32 // 数据量
+	head     uint64 // List head
+	tail     uint64 // List tail
+}
+
+func (md *metadata) encode() []byte {
+	var size = maxMetadataSize
+	if md.dataType == byte(RList) {
+		size += extraListMetaSize
+	}
+
+	buf := make([]byte, size)
+	var index = 1
+	buf[0] = md.dataType
+	index += binary.PutVarint(buf[index:], md.expire)
+	index += binary.PutVarint(buf[index:], md.version)
+	index += binary.PutUvarint(buf[index:], uint64(md.size))
+
+	if md.dataType == byte(RList) {
+		index += binary.PutUvarint(buf[index:], md.head)
+		index += binary.PutUvarint(buf[index:], md.tail)
+	}
+
+	return buf[:index]
+}
+
+func decodeMetadata(buf []byte) *metadata {
+	if len(buf) == 0 {
+		return nil
+	}
+
+	var n = 1
+	expire, len := binary.Varint(buf[n:])
+	n += len
+	version, len := binary.Varint(buf[n:])
+	n += len
+	size, len := binary.Uvarint(buf[n:])
+	n += len
+
+	var head, tail uint64 = 0, 0
+	if buf[0] == byte(RList) {
+		head, len = binary.Uvarint(buf[n:])
+		n += len
+		tail, len = binary.Uvarint(buf[n:])
+		n += len
+	}
+
+	return &metadata{
+		dataType: buf[0],
+		expire:   expire,
+		version:  version,
+		size:     uint32(size),
+		head:     head,
+		tail:     tail,
+	}
+}
+
+type hashInternalKey struct {
+	key     []byte
+	version int64
+	filed   []byte
+}
+
+func (hk *hashInternalKey) encode() []byte {
+	buf := make([]byte, len(hk.key)+len(hk.filed)+8)
+
+	var index = 0
+	copy(buf[index:index+len(hk.key)], hk.key)
+	index += len(hk.key)
+
+	binary.LittleEndian.PutUint64(buf[index:index+8], uint64(hk.version))
+	index += 8
+
+	copy(buf[index:], hk.filed)
+	return buf
+}
