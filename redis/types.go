@@ -185,6 +185,114 @@ func (rdb *RedisDB) HDel(key, field []byte) (bool, error) {
 	return exist, nil
 }
 
+//==================== Set ====================
+
+func (rdb *RedisDB) SAdd(key, member []byte) (bool, error) {
+	meta, err := rdb.findMetadata(key, RSet)
+
+	if err != nil {
+		return false, err
+	}
+
+	//构造Set数据部分的key
+	sk := &setInternalKey{
+		key:     key,
+		version: meta.version,
+		member:  member,
+	}
+
+	encSk := sk.encode()
+
+	//查找当前的key是否存在
+	var exist = true
+	if _, err = rdb.db.Get(encSk); err == util.ErrKeyNotFound {
+		exist = false
+	}
+
+	if !exist {
+		wb := rdb.db.NewWriteBatch(config.DefaultWriteBatchOptions)
+		meta.size++
+		_ = wb.Put(key, meta.encode())
+		_ = wb.Put(sk.encode(), nil)
+		if err = wb.Commit(); err != nil {
+			return false, err
+		}
+		return true, nil
+	}
+	return false, nil
+}
+
+func (rdb *RedisDB) SIsMember(key, member []byte) (bool, error) {
+	meta, err := rdb.findMetadata(key, RSet)
+
+	if meta == nil {
+		return false, nil
+	}
+	if err != nil {
+		return false, err
+	}
+
+	if meta.size == 0 {
+		return false, nil
+	}
+
+	//构造Set数据部分的key
+	sk := &setInternalKey{
+		key:     key,
+		version: meta.version,
+		member:  member,
+	}
+
+	encSk := sk.encode()
+
+	//查找当前的key是否存在
+	_, err = rdb.db.Get(encSk)
+	if err != nil && err != util.ErrKeyNotFound {
+		return false, err
+	}
+
+	if err != nil && err == util.ErrKeyNotFound {
+		return false, nil
+	}
+
+	return true, nil
+}
+
+func (rdb *RedisDB) SRem(key, member []byte) (bool, error) {
+	meta, err := rdb.findMetadata(key, RSet)
+
+	if err != nil {
+		return false, err
+	}
+
+	if meta.size == 0 {
+		return false, nil
+	}
+
+	//构造Set数据部分的key
+	sk := &setInternalKey{
+		key:     key,
+		version: meta.version,
+		member:  member,
+	}
+
+	encSk := sk.encode()
+
+	if _, err = rdb.db.Get(encSk); err == util.ErrKeyNotFound {
+		return false, nil
+	}
+
+	// 更新
+	wb := rdb.db.NewWriteBatch(config.DefaultWriteBatchOptions)
+	meta.size--
+	_ = wb.Put(key, meta.encode())
+	_ = wb.Put(sk.encode(), nil)
+	if err = wb.Commit(); err != nil {
+		return false, err
+	}
+	return true, nil
+}
+
 // 查找元数据，如果不存在返回一个初始化的metadata
 func (rdb *RedisDB) findMetadata(key []byte, dataType redisDataStructureType) (*metadata, error) {
 	encMeta, err := rdb.db.Get(key)
