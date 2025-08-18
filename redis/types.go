@@ -293,6 +293,108 @@ func (rdb *RedisDB) SRem(key, member []byte) (bool, error) {
 	return true, nil
 }
 
+//==================== List ====================
+
+func (rdb *RedisDB) LPush(key, element []byte) (uint32, error) {
+	return rdb.pushInner(key, element, true)
+}
+
+func (rdb *RedisDB) RPush(key, element []byte) (uint32, error) {
+	return rdb.pushInner(key, element, false)
+}
+
+func (rdb *RedisDB) pushInner(key, element []byte, isLeft bool) (uint32, error) {
+	meta, err := rdb.findMetadata(key, RList)
+
+	if err != nil {
+		return 0, err
+	}
+
+	//构造List数据部分的key
+	lk := &listInternalKey{
+		key:     key,
+		version: meta.version,
+	}
+
+	if isLeft {
+		lk.index = meta.head
+	} else {
+		lk.index = meta.tail
+	}
+
+	// 更新元数据
+	wb := rdb.db.NewWriteBatch(config.DefaultWriteBatchOptions)
+	meta.size++
+
+	if isLeft {
+		meta.head--
+	} else {
+		meta.tail++
+	}
+
+	_ = wb.Put(key, meta.encode())
+	_ = wb.Put(lk.encode(), element)
+	if err = wb.Commit(); err != nil {
+		return 0, err
+	}
+
+	return meta.size, nil
+}
+
+func (rdb *RedisDB) LPop(key []byte) ([]byte, error) {
+	return rdb.popInner(key, true)
+}
+
+func (rdb *RedisDB) RPop(key []byte) ([]byte, error) {
+	return rdb.popInner(key, false)
+}
+
+func (rdb *RedisDB) popInner(key []byte, isLeft bool) ([]byte, error) {
+	meta, err := rdb.findMetadata(key, RList)
+
+	if meta == nil {
+		return nil, nil
+	}
+
+	if err != nil {
+		return nil, err
+	}
+
+	//构造List数据部分的key
+	lk := &listInternalKey{
+		key:     key,
+		version: meta.version,
+	}
+
+	if isLeft {
+		lk.index = meta.head + 1
+	} else {
+		lk.index = meta.tail - 1
+	}
+
+	encLk := lk.encode()
+
+	val, err := rdb.db.Get(encLk)
+	if err != nil {
+		return nil, err
+	}
+
+	// 更新元数据
+	meta.size--
+
+	if isLeft {
+		meta.head++
+	} else {
+		meta.tail--
+	}
+
+	if err = rdb.db.Put(key, meta.encode()); err != nil {
+		return nil, err
+	}
+
+	return val, nil
+}
+
 // 查找元数据，如果不存在返回一个初始化的metadata
 func (rdb *RedisDB) findMetadata(key []byte, dataType redisDataStructureType) (*metadata, error) {
 	encMeta, err := rdb.db.Get(key)
@@ -325,7 +427,7 @@ func (rdb *RedisDB) findMetadata(key []byte, dataType redisDataStructureType) (*
 			size:     0,
 		}
 		if dataType == RList {
-			meta.head = initialListMark
+			meta.head = initialListMark - 1
 			meta.tail = initialListMark
 		}
 	}

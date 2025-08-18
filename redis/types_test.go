@@ -139,3 +139,30 @@ func TestRedisData_Set(t *testing.T) {
 	assert.Nil(t, err)
 	assert.Equal(t, is3, false)
 }
+
+func TestRedisData_List(t *testing.T) {
+	opts := config.DefaultOptions
+	dir, _ := os.MkdirTemp("", "bitcask-go-redis-set")
+	opts.DataDir = dir
+	rdb, err := NewRedisDB(opts)
+	assert.Nil(t, err)
+
+	var val1 []byte = []byte("test2")
+	s1, err := rdb.LPush(util.GetTestKey(2), val1)
+	assert.Nil(t, err)
+	assert.Equal(t, s1, uint32(1))
+
+	var val2 []byte = []byte("test3")
+	s2, err := rdb.RPush(util.GetTestKey(2), val2)
+	assert.Nil(t, err)
+	assert.Equal(t, s2, uint32(2))
+
+	el1, err := rdb.LPop(util.GetTestKey(2))
+	assert.Nil(t, err)
+	assert.Equal(t, el1, val1)
+
+	var val3 []byte = []byte("test3")
+	s3, err := rdb.LPush(util.GetTestKey(2), val3)
+	assert.Nil(t, err)
+	assert.Equal(t, s3, uint32(2))
+}
